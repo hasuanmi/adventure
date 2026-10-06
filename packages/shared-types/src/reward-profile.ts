@@ -17,6 +17,12 @@ export const REWARD_PROFILE_CODES = [
   'SCENERY_COLLABORATION',
   'SCENERY_CARE',
   'CUSTOM',
+// 2026-10-06 用户新增的 5 个任务类型
+'TYPE_DAILY',
+'TYPE_SCIENCE_HUMANITIES',
+'TYPE_SOCIAL',
+'TYPE_BOUNTY',
+'TYPE_PHYSICAL',
 ] as const;
 export type RewardProfileCode = (typeof REWARD_PROFILE_CODES)[number];
 
@@ -29,7 +35,13 @@ export const REWARD_PROFILE_CATEGORIES = [
   'scenery',
   'bounty',
   'physical',
-  'custom',
+  'CUSTOM',
+// 2026-10-06 用户新增的 5 个任务类型
+'TYPE_DAILY',
+'TYPE_SCIENCE_HUMANITIES',
+'TYPE_SOCIAL',
+'TYPE_BOUNTY',
+'TYPE_PHYSICAL',
 ] as const;
 export type RewardProfileCategory = (typeof REWARD_PROFILE_CATEGORIES)[number];
 
