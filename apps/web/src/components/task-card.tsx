@@ -208,24 +208,25 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
                 编辑
               </Link>
             )}
-            {/* 取消任务（软删除；后端 DELETE /tasks/:id，已完成任务不可取消）
-                原先前端没有任何取消入口，用户反馈"任务没有取消功能" */}
+            {/* 删除任务（后端是软删除；已完成任务不可删）
+                原先前端没有任何删除入口，用户两次反馈"没有删除功能" → 改为醒目的「删除任务」+ 二次确认 */}
             {task.status !== 'completed' && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <button
                     type="button"
                     data-cancel-task
-                    className="border-2 border-danger/60 bg-panelLight px-3 py-2 text-sm font-bold text-danger transition hover:bg-danger/10"
+                    data-delete-task
+                    className="border-2 border-danger bg-danger/10 px-3 py-2 text-sm font-bold text-danger transition hover:bg-danger/20"
                   >
-                    取消任务
+                    删除任务
                   </button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>取消这个任务？</AlertDialogTitle>
+                    <AlertDialogTitle>删除这个任务？</AlertDialogTitle>
                     <AlertDialogDescription>
-                      「{task.title}」将被取消（软删除，不再出现在今日与日程）。已完成的任务不能取消。
+                      「{task.title}」将从今日与日程移除（软删除，可联系管理员恢复）。已完成的任务不能删除。
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -241,7 +242,7 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
                         removeMutation.mutate();
                       }}
                     >
-                      确认取消
+                      确认删除
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>

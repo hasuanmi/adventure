@@ -65,28 +65,38 @@ export function GrowthPage() {
                 累计 {me.xp} XP
               </span>
             </p>
-            <div className="mt-1.5 flex items-center gap-2">
+            <div className="mt-1.5">
+              {/* 与表头同一套等级 UI：外框 + 数字徽章 + 条内经验文字（深蓝填充 / 白色余量 / 立体内阴影） */}
               <span
-                data-level-badge
-                className="grid h-7 min-w-7 shrink-0 place-items-center border-2 border-ink bg-accent px-1.5 text-sm font-extrabold text-white"
-              >
-                {xpProgress.level}
-              </span>
-              <span
-                data-xp-bar
-                className="relative h-7 min-w-0 flex-1 overflow-hidden rounded-md border-2 border-ink bg-panelLight"
+                data-level-frame
+                className="flex items-center gap-2 border-2 border-ink bg-panelLight p-1 shadow-pixel"
               >
                 <span
-                  aria-hidden
-                  className="absolute inset-y-0 left-0 bg-xp transition-all"
-                  style={{ width: `${Math.round(xpProgress.ratio * 100)}%` }}
-                />
-                <span
-                  data-xp-label
-                  className="absolute inset-0 grid place-items-center text-xs font-extrabold text-white"
-                  style={{ textShadow: '1px 1px 0 rgba(0,0,0,0.45)' }}
+                  data-level-badge
+                  className="grid h-8 min-w-8 shrink-0 place-items-center border-2 border-ink bg-accent px-1.5 text-base font-extrabold text-white"
+                  style={{ boxShadow: 'inset 0 -2px 0 rgba(0,0,0,0.25)' }}
                 >
-                  {xpProgress.current} / {xpProgress.needed} XP
+                  {xpProgress.level}
+                </span>
+                <span
+                  data-xp-bar
+                  className="relative h-8 min-w-0 flex-1 overflow-hidden border-2 border-ink bg-white"
+                >
+                  <span
+                    aria-hidden
+                    className="absolute inset-y-0 left-0 bg-xp transition-all"
+                    style={{
+                      width: `${Math.round(xpProgress.ratio * 100)}%`,
+                      boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.35)',
+                    }}
+                  />
+                  {/* 数字自带深色底（同表头）：任何进度下都可读 */}
+                  <span
+                    data-xp-label
+                    className="absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center bg-xp px-2 text-sm font-extrabold text-white"
+                  >
+                    {xpProgress.current} / {xpProgress.needed} XP
+                  </span>
                 </span>
               </span>
             </div>

@@ -1,7 +1,18 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Pencil, Play, RotateCcw, Send } from 'lucide-react';
+import { ArrowLeft, Pencil, Play, RotateCcw, Send, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '../components/ui/alert-dialog';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Panel } from '../components/ui/card';
@@ -32,6 +43,7 @@ export function TaskDetailPage() {
   const { id = '' } = useParams();
   const user = useUser();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const isChild = user?.role === 'child';
   const [rejecting, setRejecting] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
@@ -67,6 +79,25 @@ export function TaskDetailPage() {
     mutationFn: () => approvalsApi.approve(approvalId as string),
     onSuccess: afterDecision,
     onError: (err) => setActionError(err instanceof ApiError ? `${err.reason ?? '错误'}：${err.message}` : '操作失败'),
+  });
+  // 删除任务（软删除；已完成 → 409）：删完回今日
+  const removeMutation = useMutation({
+    mutationFn: () => tasksApi.remove(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['approvals'] });
+      navigate('/');
+    },
+    onError: (err) => {
+      const e = err instanceof ApiError ? err : null;
+      setActionError(
+        e?.status === 409
+          ? '已完成的任务不能删除'
+          : e?.status === 403
+            ? '你没有权限删除这个任务'
+            : '删除失败，请稍后再试',
+      );
+    },
   });
   const rejectMutation = useMutation({
     mutationFn: (comment: string) => approvalsApi.reject(approvalId as string, comment),
@@ -137,12 +168,41 @@ export function TaskDetailPage() {
           <ArrowLeft className="h-4 w-4" /> 返回今日
         </Link>
         {canEdit && (
-          <Link
-            to={`/tasks/${task.id}/edit`}
-            className="inline-flex items-center gap-1 border-2 border-ink bg-panel px-2 py-1 text-xs font-bold shadow-pixel active:translate-y-0.5"
-          >
-            <Pencil className="h-3.5 w-3.5" /> 编辑
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/tasks/${task.id}/edit`}
+              className="inline-flex items-center gap-1 border-2 border-ink bg-panel px-2 py-1 text-xs font-bold shadow-pixel active:translate-y-0.5"
+            >
+              <Pencil className="h-3.5 w-3.5" /> 编辑
+            </Link>
+            {/* 删除任务（软删除；已完成不可删）—— 用户反馈"没有删除功能"，
+                详情页这里是最自然的入口，故与「编辑」并列醒目放置 */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button
+                  type="button"
+                  data-delete-task
+                  className="inline-flex items-center gap-1 border-2 border-danger bg-danger/10 px-2 py-1 text-xs font-bold text-danger shadow-pixel active:translate-y-0.5"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> 删除
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>删除这个任务？</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    「{task.title}」将从今日与日程移除（软删除，可联系管理员恢复）。已完成的任务不能删除。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>再想想</AlertDialogCancel>
+                  <AlertDialogAction data-confirm-cancel onClick={() => removeMutation.mutate()}>
+                    确认删除
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         )}
       </div>
 

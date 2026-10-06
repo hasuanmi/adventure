@@ -56,29 +56,38 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               src="/avatar-girl-toon.png"
               alt=""
               aria-hidden
-              className="h-10 w-10 shrink-0 rounded-md border-2 border-ink/60 bg-panelLight object-cover"
+              className="h-11 w-11 shrink-0 border-2 border-panelLight/50 bg-panelLight object-cover"
             />
             <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-1.5">
+              {/* 等级框（参考旧项目）：**外框 + 数字徽章 + 条内经验文字**，
+                  条有立体内阴影；填充深蓝、余量白色，白字带深色描边保证在两种底上都可读 */}
+              <span
+                data-level-frame
+                className="flex items-center gap-1.5 border-2 border-ink bg-panelLight p-1 shadow-pixel"
+              >
                 <span
                   data-level-badge
-                  className="grid h-5 min-w-5 shrink-0 place-items-center border-2 border-ink bg-accent px-1 text-[11px] font-extrabold text-white"
+                  className="grid h-6 min-w-6 shrink-0 place-items-center border-2 border-ink bg-accent px-1 text-sm font-extrabold text-white"
+                  style={{ boxShadow: 'inset 0 -2px 0 rgba(0,0,0,0.25)' }}
                 >
                   {xpProgress ? xpProgress.level : '—'}
                 </span>
                 <span
                   data-xp-bar
-                  className="relative h-5 min-w-0 flex-1 overflow-hidden rounded-md border-2 border-ink bg-panelLight"
+                  className="relative h-6 min-w-0 flex-1 overflow-hidden border-2 border-ink bg-white"
                 >
                   <span
                     aria-hidden
                     className="absolute inset-y-0 left-0 bg-xp transition-all"
-                    style={{ width: `${Math.round((xpProgress?.ratio ?? 0) * 100)}%` }}
+                    style={{
+                      width: `${Math.round((xpProgress?.ratio ?? 0) * 100)}%`,
+                      boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.35)',
+                    }}
                   />
+                  {/* 数字**自带深色底**：进度 0% 时也不会白字压白底（用户要求"数字后面要深色"） */}
                   <span
                     data-xp-label
-                    className="absolute inset-0 grid place-items-center text-[10px] font-extrabold text-white"
-                    style={{ textShadow: '1px 1px 0 rgba(0,0,0,0.45)' }}
+                    className="absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center bg-xp px-1.5 text-[10px] font-extrabold text-white"
                   >
                     {xpProgress ? `${xpProgress.current} / ${xpProgress.needed} XP` : '— XP'}
                   </span>

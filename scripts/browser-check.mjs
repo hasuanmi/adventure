@@ -296,6 +296,13 @@ async function main() {
   });
   const task2Id = createdTask2.json?.id;
   check('prepare: 两个任务已创建', Boolean(taskId && task2Id), true);
+  // 供"任务详情页删除"用例使用
+  const detailTask = await api('POST', '/tasks', parentToken, {
+    childId,
+    title: `详情删除测试 ${STAMP}`,
+    requiresApproval: false,
+  });
+  const detailTaskId = detailTask.json?.id;
 
   // 两个**完全同时间段**的任务（15:00–16:00）→ 验证"冲突显示 + 并排展示"
   // 各带一个颜色 → 同时验证"日程任务块用所选颜色做实色底"
@@ -871,8 +878,36 @@ async function main() {
     console.log(`      等级 UI：${JSON.stringify(levelUi)}`);
     check('等级徽章显示数字', /^\d+$/.test(levelUi?.badgeText ?? ''), true);
     check('经验值文字在条内（cur / need XP）', /^\d+ \/ \d+ XP$/.test(levelUi?.labelText ?? '') && levelUi?.inside === true, true);
-    check('经验条为圆角', Number(levelUi?.radius ?? 0) >= 4, true);
+    check('经验条为直角像素条（参考图为方角）', Number(levelUi?.radius ?? 0) <= 2, true);
     check('表头头像换成 toon 角色图', String(levelUi?.imgSrc ?? '').includes('avatar-girl-toon'), true);
+    // 参考图的形态：**外框 + 立体阴影 + 深蓝填充 + 白色余量**
+    const levelLook = await cdp.evaluate(`(() => {
+      const frame = document.querySelector('[data-growth-entry] [data-level-frame]');
+      const bar = document.querySelector('[data-growth-entry] [data-xp-bar]');
+      const fill = bar ? bar.querySelector('span[aria-hidden]') : null;
+      if (!frame || !bar || !fill) return null;
+      const fs = getComputedStyle(frame);
+      const bs = getComputedStyle(bar);
+      const is = getComputedStyle(fill);
+      const nums = (s) => (s.match(/\\d+(\\.\\d+)?/g) || []).map(Number);
+      const [r, g, b] = nums(is.backgroundColor);
+      return {
+        frameBorder: parseFloat(fs.borderTopWidth) || 0,
+        frameShadow: fs.boxShadow,
+        barBg: bs.backgroundColor,
+        fillBg: is.backgroundColor,
+        fillShadow: is.boxShadow,
+        blueish: b > r && b > g,
+        labelBg: getComputedStyle(document.querySelector('[data-xp-label]')).backgroundColor,
+      };
+    })()`);
+    console.log(`      等级观感：${JSON.stringify(levelLook)}`);
+    check('等级区有外框（2px 描边）', Number(levelLook?.frameBorder ?? 0) >= 2, true);
+    check('等级外框有像素硬阴影（立体感）', /rgba?\(/.test(String(levelLook?.frameShadow)) && levelLook?.frameShadow !== 'none', true);
+    check('经验条余量为白色（不是与填充同色）', levelLook?.barBg === 'rgb(255, 255, 255)', true);
+    check('经验条填充为深蓝', levelLook?.blueish === true, true);
+    check('经验条填充有内阴影（立体）', String(levelLook?.fillShadow ?? '').includes('inset'), true);
+    check('经验文字自带深色底（任何进度都可读）', levelLook?.labelBg === levelLook?.fillBg, true);
     const avatarWidth = await cdp.evaluate(
       `(() => { const i = document.querySelector('[data-growth-entry] img'); return i ? i.naturalWidth : 0; })()`,
     );
@@ -1028,7 +1063,7 @@ async function main() {
     await cdp.clickSelector('[data-cancel-task]');
     await sleep(400);
     const dialogOpen = await cdp.evaluate(
-      `Boolean([...document.querySelectorAll('[role="alertdialog"] h2, [role="alertdialog"] *')].find((e) => (e.textContent || '').includes('取消这个任务')))`,
+      `Boolean([...document.querySelectorAll('[role="alertdialog"] *')].find((e) => (e.textContent || '').includes('删除这个任务')))`,
     );
     check('取消任务有二次确认弹窗', dialogOpen, true);
     await cdp.clickSelector('[data-confirm-cancel]');
@@ -1064,6 +1099,20 @@ async function main() {
     check('时间与已有任务重叠时给出冲突提示', Boolean(warn && warn.includes('时间冲突')), true);
     check('冲突提示列出冲突任务', String(warn ?? '').includes('冲突A'), true);
     await cdp.shot('19-conflict-warning');
+
+    // ---------- 13d. 任务详情页的删除入口（用户反馈"没有删除功能"） ----------
+    await cdp.send('Page.navigate', { url: `${BASE}/tasks/${detailTaskId}` });
+    await cdp.waitFor('[data-delete-task]');
+    check('详情页有删除按钮', await cdp.evaluate(`Boolean(document.querySelector('[data-delete-task]'))`), true);
+    await cdp.clickSelector('[data-delete-task]');
+    await sleep(400);
+    await cdp.clickSelector('[data-confirm-cancel]');
+    await sleep(1800);
+    const detailGone = await cdp.evaluate(`location.pathname`);
+    check('详情页删除后回到今日', detailGone, '/');
+    const stillThere = await api('GET', '/tasks', childToken);
+    const list = Array.isArray(stillThere.json) ? stillThere.json : (stillThere.json?.tasks ?? []);
+    check('详情页删除后任务确实不在列表里', list.some((t) => t.id === detailTaskId) === false, true);
   } finally {
     clearTimeout(watchdog);
     try {

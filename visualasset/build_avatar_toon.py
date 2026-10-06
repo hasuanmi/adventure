@@ -1,16 +1,18 @@
 """从 Kenney Toon Characters（CC0）里导出表头/成长页用的**头肩像**。
-来源：visualasset/kenney_toon-characters/Female person/PNG/Poses/character_femalePerson_idle.png（96×128，透明）
-输出：apps/web/public/avatar-girl-toon.png（128×128，头肩裁切 + 正方形 + LANCZOS 重采样）
+默认角色：Female adventurer（女冒险者，红发 + 绿衣 + 挎包）idle 姿势 —— 用户反馈"换一个好看一点的"，
+候选对照见 visualasset/_avatar_candidates.py 生成的对照图（同角色 cheer0 为备选）。
+来源：visualasset/kenney_toon-characters/<角色>/PNG/Poses/character_*_<pose>.png（96×128，透明）
+输出：apps/web/public/avatar-girl-toon.png（128×128，头肩裁切 + 正方形 + LANCZOS）
       （Toon 是平滑卡通风而非像素风，故用 LANCZOS；像素风头像另见 build_avatar.py）
 """
+import glob
 import os
 from PIL import Image
 
 ROOT = r"C:\Users\48489\Desktop\time"
-SRC = os.path.join(
-    ROOT, "visualasset", "kenney_toon-characters", "Female person", "PNG", "Poses",
-    "character_femalePerson_idle.png",
-)
+CHARACTER = "Female adventurer"
+POSE = "idle"
+SRC_DIR = os.path.join(ROOT, "visualasset", "kenney_toon-characters", CHARACTER, "PNG", "Poses")
 OUT = os.path.join(ROOT, "apps", "web", "public", "avatar-girl-toon.png")
 CHECK = os.path.join(ROOT, "visualasset", "_avatar_toon_check.png")
 SIZE = 128
@@ -19,7 +21,11 @@ HEAD_RATIO = 0.78
 
 
 def main() -> None:
-    im = Image.open(SRC).convert("RGBA")
+    matches = sorted(glob.glob(os.path.join(SRC_DIR, f"*_{POSE}.png")))
+    if not matches:
+        raise SystemExit(f"找不到姿势图：{SRC_DIR}/*_{POSE}.png")
+    src = matches[0]
+    im = Image.open(src).convert("RGBA")
     bbox = im.getbbox()  # alpha 包围盒
     if not bbox:
         raise SystemExit("源图完全透明")
@@ -39,7 +45,7 @@ def main() -> None:
     square.paste(crop, ((side - crop.width) // 2, (side - crop.height) // 2), crop)
     out = square.resize((SIZE, SIZE), Image.LANCZOS)
     out.save(OUT)
-    print(f"{SRC} bbox={bbox} -> {OUT} {out.size}")
+    print(f"{src} bbox={bbox} -> {OUT} {out.size}")
 
     # 自检图：浅底 + 深底各一份，确认透明背景与裁切位置
     sheet = Image.new("RGBA", (SIZE * 2 + 24, SIZE + 16), (60, 64, 88, 255))
