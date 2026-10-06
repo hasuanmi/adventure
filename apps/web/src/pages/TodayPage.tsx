@@ -41,6 +41,38 @@ export function TodayPage() {
     );
   }
 
+  // 未加入家庭：先给"创建/加入家庭"引导（P2 实测：不能让它被任务读取报错顶掉）
+  const noFamily = familyQuery.data !== undefined && familyQuery.data.familyId === null;
+  if (noFamily) {
+    return (
+      <div className="space-y-4">
+        <Panel className="border-warning/70">
+          <p className="text-sm font-bold text-ink">🏠 你还没有加入家庭</p>
+          <p className="mt-1 text-xs text-inkSoft">
+            {user?.role === 'parent'
+              ? '创建家庭后，你就是家庭邀请码的持有者，才能给孩子布置任务。'
+              : '请向家长要邀请码（家长用户名），加入后才能看到任务。'}
+          </p>
+          <Link
+            to="/family"
+            className="mt-2 inline-block border-2 border-ink bg-accent px-3 py-1.5 text-sm font-bold text-white shadow-pixel"
+          >
+            {user?.role === 'parent' ? '创建家庭（1 步）' : '加入家庭'}
+          </Link>
+        </Panel>
+        <Panel>
+          <p className="text-xs text-inkSoft">
+            加入家庭后这里会显示今日任务与进度。现在也可以先去
+            <Link to="/schedule" className="mx-1 font-bold text-accent underline">
+              日程
+            </Link>
+            看看。
+          </p>
+        </Panel>
+      </div>
+    );
+  }
+
   if (tasksQuery.isError) {
     return (
       <Panel>
@@ -64,28 +96,9 @@ export function TodayPage() {
   const percent = scoped.length > 0 ? Math.round((completedCount / scoped.length) * 100) : 0;
   const visible = tab === 'all' ? scoped : scoped.filter((t) => t.status === tab);
   const pendingCount = pendingApprovalQuery.data?.length ?? 0;
-  const noFamily = familyQuery.data !== undefined && familyQuery.data.familyId === null;
 
   return (
     <div className="space-y-4">
-      {/* 未加入家庭：P2 补的正式入口（替代 P1 的 SQL 赋值） */}
-      {noFamily && (
-        <Panel className="border-warning/70">
-          <p className="text-sm font-bold text-ink">🏠 你还没有加入家庭</p>
-          <p className="mt-1 text-xs text-inkSoft">
-            {user?.role === 'parent'
-              ? '创建家庭后，你就是家庭邀请码的持有者，才能给孩子布置任务。'
-              : '请向家长要邀请码（家长用户名），加入后才能看到任务。'}
-          </p>
-          <Link
-            to="/family"
-            className="mt-2 inline-block border-2 border-ink bg-accent px-3 py-1.5 text-sm font-bold text-white shadow-pixel"
-          >
-            {user?.role === 'parent' ? '创建家庭' : '加入家庭'}
-          </Link>
-        </Panel>
-      )}
-
       {/* 今日冒险（PixelBar 进度） */}
       <Panel className="border-2 border-ink bg-ink text-panelLight">
         <PanelHeader className="text-panelLight">⚔️ 今日冒险</PanelHeader>

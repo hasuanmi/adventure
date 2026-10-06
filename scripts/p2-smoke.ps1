@@ -15,6 +15,24 @@ $ErrorActionPreference = "Continue"
 # Invoke-WebRequest uses Write-Progress internally, which can fail on hosts whose
 # console buffer is not readable; silence progress for reliability.
 $ProgressPreference = "SilentlyContinue"
+
+# Self-guard 1: this file MUST stay ASCII-only. Windows PowerShell 5.1 reads UTF-8 files
+# as GBK; mangled non-ASCII bytes can swallow the following line and SILENTLY drop an
+# assertion (exactly what happened once -- a Chinese comment hid one Check).
+$selfPath = $PSCommandPath
+if (-not $selfPath) { $selfPath = $MyInvocation.MyCommand.Path }
+if ($selfPath -and (Test-Path $selfPath)) {
+  $selfText = Get-Content -Raw $selfPath
+  if ($selfText -match '[^\x00-\x7F]') {
+    Write-Output "ERROR: scripts/p2-smoke.ps1 contains non-ASCII characters; assertions may be silently skipped."
+    Write-Output "       Keep this file ASCII-only (see the note above)."
+    exit 2
+  }
+}
+# Self-guard 2: expected number of executed assertions (pass + fail + skip).
+# Prevents a silently dropped Check from going unnoticed (see self-guard 1).
+$EXPECTED_CHECKS = 42
+
 $BASE = if ($env:SMOKE_BASE) { $env:SMOKE_BASE } else { "http://localhost:3000/api" }
 
 # DB access (grant-count / cleanup checks). Overridable via PG* env vars so the same
@@ -58,9 +76,10 @@ function Http($method, $path, $token, $body) {
     $resp = Invoke-WebRequest @params
     return [pscustomobject]@{ Status = [int]$resp.StatusCode; Text = [string]$resp.Content }
   } catch {
-    # 错误响应体取值必须同时兼容 Windows PowerShell 5.1 与 PowerShell 7：
-    #   PS 5.1: Exception.Response 是 HttpWebResponse（有 GetResponseStream）
-    #   PS 7   : Exception.Response 是 HttpResponseMessage（无 GetResponseStream），body 在 ErrorDetails.Message
+    # Reading the error body must work on BOTH Windows PowerShell 5.1 and PowerShell 7:
+    #   PS 5.1: Exception.Response is HttpWebResponse (has GetResponseStream)
+    #   PS 7   : Exception.Response is HttpResponseMessage (no GetResponseStream);
+    #            the body lives in ErrorDetails.Message
     $resp = $_.Exception.Response
     $status = 0
     $text = ""
@@ -79,6 +98,27 @@ function Http($method, $path, $token, $body) {
 function Call($method, $path, $token, $body) { return (Http $method $path $token $body).Text }
 function Code($method, $path, $token, $body) { return (Http $method $path $token $body).Status }
 function J($text) { return ($text | ConvertFrom-Json) }
+
+# Browser entry path: the rest of this script sends no Origin header, so CORS is never
+# exercised. A wrong CORS_ORIGINS makes the web app fail silently in the browser while
+# every other assertion below still passes -- so assert the preflight explicitly.
+function Preflight($path, $origin) {
+  $params = @{
+    Method = 'OPTIONS'
+    Uri = "$BASE$path"
+    UseBasicParsing = $true
+    Headers = @{ 'Origin' = $origin; 'Access-Control-Request-Method' = 'POST' }
+  }
+  try {
+    $r = Invoke-WebRequest @params
+    return [pscustomobject]@{ Status = [int]$r.StatusCode; AllowOrigin = (@($r.Headers['Access-Control-Allow-Origin']) -join ',') }
+  } catch {
+    $resp = $_.Exception.Response
+    $status = 0
+    if ($resp) { $status = [int]$resp.StatusCode }
+    return [pscustomobject]@{ Status = $status; AllowOrigin = '' }
+  }
+}
 
 function Check($name, $actual, $expected) {
   if ("$actual" -eq "$expected") {
@@ -110,6 +150,12 @@ function Q($sql) {
 }
 
 Write-Output "=== P2 SMOKE ($stamp) base=$BASE db=$($script:hasDb) ==="
+
+# ---------- 0a. browser entry path (CORS preflight) ----------
+$appOrigin = [regex]::Replace($BASE, '/api/?$', '')
+$pre = Preflight "/auth/login" $appOrigin
+Check "CORS preflight status 204" $pre.Status 204
+Check "CORS preflight allows app origin ($appOrigin)" $pre.AllowOrigin $appOrigin
 
 # ---------- 0. register / login ----------
 $created = 0
@@ -193,6 +239,11 @@ $loneList = @(J (Call "GET" "/approvals" $lt $null))
 Check "no-family approvals list is empty" $loneList.Count 0
 Check "no-family create task -> 400" (Code "POST" "/tasks" $lt (Body @{ childId = $childId; title = "x" })) "400"
 Check "no-family family/me has null familyId" ((J (Call "GET" "/family/me" $lt $null)).familyId) ""
+# Regression: a freshly registered parent (before creating a family) must get 200 + []
+# from GET /tasks. A 403 here makes Today/Schedule show "read failed" and hides the
+# "create family" onboarding.
+Check "no-family parent: GET /tasks -> 200" (Code "GET" "/tasks" $lt $null) "200"
+Check "no-family parent: task list empty" (@(J (Call "GET" "/tasks" $lt $null))).Count 0
 
 # ---------- 4. PATCH guard: self-review + reviewer must be a family member ----------
 $task2 = J (Call "POST" "/tasks" $pt (Body @{ childId = $childId; title = "PatchTask$stamp"; requiresApproval = $true; reviewerId = $parentId }))
@@ -219,4 +270,12 @@ CheckDb "cleanup removed smoke users" $left "0"
 
 Write-Output ("=== RESULT: pass={0} fail={1} skip={2} ===" -f $script:pass, $script:fail, $script:skip)
 if ($script:skip -gt 0) { Write-Output "NOTE: DB checks were skipped (psql unavailable) - smoke test data may remain in the database." }
+
+# Self-guard 2: every declared assertion must actually have run
+$executed = $script:pass + $script:fail + $script:skip
+if ($executed -ne $EXPECTED_CHECKS) {
+  Write-Output ("FAIL  executed checks = {0}, expected {1} (an assertion was silently skipped)" -f $executed, $EXPECTED_CHECKS)
+  $script:fail++
+}
+
 if ($script:fail -gt 0) { exit 1 }

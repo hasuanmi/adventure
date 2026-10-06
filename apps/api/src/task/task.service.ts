@@ -93,7 +93,10 @@ export class TaskService {
     const where: Record<string, unknown> = { deletedAt: null };
     if (actor.role === 'child') where.childId = actor.sub;
     else if (actor.role === 'parent') {
-      if (!actor.familyId) throw new ForbiddenException({ error: 'forbidden', reason: TASK_REASON.FORBIDDEN });
+      // 无家庭 = 无家庭范围数据 → 返回空列表（不是权限错误）。
+      // 新注册家长在"创建/加入家庭"之前就属于这种状态，若这里抛 403，
+      // 今日/日程页会先显示"读取任务失败"，把"去创建家庭"的引导顶掉（P2 实测踩到）。
+      if (!actor.familyId) return [];
       where.familyId = actor.familyId;
     } else {
       throw new ForbiddenException({ error: 'forbidden', reason: TASK_REASON.FORBIDDEN });

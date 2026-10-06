@@ -96,12 +96,13 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 |---|---|---|
 | 三包类型检查 | 直接调 `tsc -p ... --noEmit`（shared-types / api / web） | ✅ 全部 exit 0 |
 | Web 生产构建 | `node node_modules/vite/bin/vite.js build` | ✅ 2204 模块转换、`dist` 产出（仅 zod 注释与 chunk 体积告警，既有） |
-| 端到端闭环 + 越权负例 | `scripts/p2-smoke.ps1`（新增，可重复执行） | ✅ **38/38 PASS**：注册/登录 → 建家庭 → 加成员 → 建需确认任务 → 开始 → 提交 → 家长看到待确认（`canAct=true`、`descriptor.label`=任务标题）→ 非确认人 403 → 驳回缺意见 400 → 通过 → `completed` → `reward_grants=1` → `xp>0`；另含无家庭 400、无家庭审批列表为空、PATCH 自审/外家庭/区间 400、**待审批时禁止取消人工确认 409 且未产生第二条 completion** |
+| 端到端闭环 + 越权负例 | `scripts/p2-smoke.ps1`（新增，可重复执行） | ✅ **42/42 PASS**：CORS 预检放行 → 注册/登录 → 建家庭 → 加成员 → 建需确认任务 → 开始 → 提交 → 家长看到待确认（`canAct=true`、`descriptor.label`=任务标题）→ 非确认人 403 → 驳回缺意见 400 → 通过 → `completed` → `reward_grants=1` → `xp>0`；另含无家庭 400 与**任务列表 200 空**、无家庭审批列表为空、PATCH 自审/外家庭/区间 400、**待审批时禁止取消人工确认 409 且未产生第二条 completion** |
 | 数据清理 | 冒烟脚本末尾按用户名级联清理 | ✅ 测试用户与关联数据全部删除（`cleanup removed smoke users = 0`） |
 | 数据库 | 未新增迁移 | ✅ `schema.prisma` 与迁移目录无改动 |
 
 > 冒烟脚本运行前置：API 在 `$BASE`（默认 `http://localhost:3000/api`，可用 `SMOKE_BASE` 覆盖）运行；DB 检查用 psql（可用 `PSQL`/`PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` 覆盖，psql 不可用时自动 SKIP 并提示）。
-> 脚本刻意只写 ASCII（Windows PowerShell 5.1 以 GBK 读取 UTF-8 文件，中文注释会破坏语法），并用 `Invoke-WebRequest`（而非 curl）避免 PS 5.1 向原生程序传参剥引号；该设计同时使其可在 CI（Linux + pwsh）直接运行。
+> 脚本刻意只写 ASCII，并用 `Invoke-WebRequest`（而非 curl）避免 PS 5.1 向原生程序传参剥引号；该设计同时使其可在 CI（Linux + pwsh）直接运行。
+> **两道自检守卫**（2026-10-06 补）：① 启动时检测文件自身是否非 ASCII（PS 5.1 会把 UTF-8 当 GBK 读，乱码字节会**吞掉下一行**从而静默丢掉一条断言——本脚本真实踩过一次）；② 结尾校验"实际执行断言数 == `$EXPECTED_CHECKS`"，少一条即失败。
 
 ### 5.1 Docker 复验（2026-10-05，本轮交付形态）
 
@@ -111,7 +112,7 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 | 端口 | `WEB_PORT=8500` **失败**（Windows 保留段已变为 `8451-8550`）→ 改 `WEB_PORT=18080`；`.env`/`.env.example`/`docs/deployment.md §7` 已同步 |
 | 容器 | postgres(healthy, 5432) / api(3000) / web=nginx(18080) 全部 Up |
 | 健康检查 | `http://localhost:3000/api/health` 与 `http://localhost:18080/api/health` 均 200 且 `db=up`；`/` 200 |
-| 端到端 | 经 nginx 路径跑 `p2-smoke.ps1` → **38/38 PASS**（等价 P1 验收项 O 的 Docker 全链路） |
+| 端到端 | 经 nginx 路径跑 `p2-smoke.ps1` → **42/42 PASS**（等价 P1 验收项 O 的 Docker 全链路） |
 | 主机进程 | 已停掉本项目的 `pnpm dev` + `nest start --watch`（避免与 api 容器争 :3000）；旧项目 huahuastudy 与 tasklabs 预览不受影响 |
 
 ---
@@ -134,7 +135,7 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 
 | 项 | 原因 |
 |---|---|
-| 统一错误体 `{error, reason, fields}` 的全局 ExceptionFilter | 涉及全 API 响应契约，需单独立项评估向后兼容；本轮未改（class-validator 仍是 Nest 默认体） |
+| ~~统一错误体 ExceptionFilter~~ | **已完成（2026-10-06，见 §10）**：`apps/api/src/common/filters/api-exception.filter.ts` 已全局注册，class-validator 的默认体也归一为 `{error, reason, fields}` |
 | `POST/GET /api/files` 上传（文档 §9.2 已描述） | 独立模块 + 存储策略，非本轮范围；完成凭证仍是文本描述 |
 | 登录限流（429） | 需引入 Throttler 依赖，本轮不引入新依赖 |
 | `GET /tasks` 的日期过滤/分页 | 本轮"今日范围"在展示层实现（与日程投影同层，符合既有约定）；后端仍返回全量（take 200） |
@@ -150,7 +151,7 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 
 1. ~~装 git + 建基线提交 + CI~~ **已完成**，仓库已推送到 `github.com/hasuanmi/adventure` 且 **CI 全绿**。下一步：为 `main` 开分支保护（要求 CI 通过才可合并）。
 2. **补 lint**：加 ESLint + Prettier 并接入 CI（文档 §13 的 lint 门禁目前仍缺）。
-3. **统一错误体**：加全局 ExceptionFilter，让 class-validator 的 400 也返回 `{error, reason, fields}`（前端 `toApiError` 已按此契约实现，现在是空转）。
+3. ~~统一错误体~~ **已完成（2026-10-06，见 §10）**。
 4. **P2 剩余 UI**：TaskCard 可展开面板（进度/完成标准/行内操作）、本周打卡位、成长页（`/growth/me` 接口已具备）。
 5. **P3 移动端**：`apps/mobile` 复用 `shared-types` 与后端，优先补齐 任务列表/详情/提交/审批 四屏。
 6. 之后按阶段表推进 P4 打卡（WorkPulse 逻辑直迁）与 P5 Event + 日历（TaskLabs/Kaneo）。
@@ -170,7 +171,7 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 | 冒烟脚本可移植 | `scripts/p2-smoke.ps1` 支持 `SMOKE_BASE` / `PSQL` / `PG*` 覆盖；无 psql 时 DB 断言 SKIP 并提示；兼容 Windows PowerShell 5.1 与 PowerShell 7 |
 | 验收脚本端口 | `scripts/p1-acceptance.ps1` 的 `$BASE` 改为默认 `http://localhost:18080/api`，并支持 `$env:ACCEPT_BASE` 覆盖 |
 | 远端仓库 | `https://github.com/hasuanmi/adventure`（`origin`，HTTPS；如需改 SSH：`git remote set-url origin git@github.com:hasuanmi/adventure.git`） |
-| CI 结果 | 推送后 **run #2 两个 job 全绿**（`typecheck + build`、`API smoke`）；CI 日志内冒烟为 `pass=38 fail=0 skip=0 db=True`（DB 断言真实执行，非跳过） |
+| CI 结果 | 推送后 **run #2 两个 job 全绿**（`typecheck + build`、`API smoke`）；CI 日志内冒烟为 `pass=38 fail=0 skip=0 db=True`（DB 断言真实执行，非跳过）；后续 run #3（docs）同样全绿 |
 
 ### 9.1 CI 首轮（run #1）抓到的两个真问题（记录为证）
 
@@ -182,3 +183,30 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 | 2 | `smoke` 中所有 `Code(...)` 断言拿到的状态码为空（`got=`） | 错误分支用了 `Exception.Response.GetResponseStream()`——那是 Windows PowerShell 5.1 / .NET Framework 的 API；CI 的 `pwsh` 7 上 `HttpResponseMessage` 没有该方法 | 改为双版本兼容：优先 `ErrorDetails.Message`，`GetResponseStream` 仅在方法存在时兜底 |
 
 > 教训：**"本地能跑"不等于"能移植"**。脚本/构建的可移植性只能由异环境执行证明（本地 PS 5.1 全绿 ≠ PS 7 可用）。
+
+---
+
+## 10. 用户首次实际使用暴露的缺陷与修复（2026-10-06）
+
+用户首次在浏览器（`http://localhost:18080`）试用时报"注册并登录不了"。**服务端日志证明请求全部到达**（`POST /api/auth/register` 400 两次、随后 201；`POST /api/auth/login` 201），因此不是网络/CORS/Docker 问题，而是三类产品缺陷：
+
+| # | 现象（用户视角） | 根因 | 修复 |
+|---|---|---|---|
+| 1 | 注册被拒只显示 `Bad Request`，完全不知道哪里错 | class-validator 的 400 是 Nest 默认体 `{statusCode, message[], error}`，**没有 `reason`**；客户端 `ApiError` 退化成 `body.error` = "Bad Request"。规则本身是"用户名 3–32 字符、密码 ≥6 位"，用户输入了 2 个汉字的用户名 | ① 新增全局 `ApiExceptionFilter`（`apps/api/src/common/filters/api-exception.filter.ts`），把校验失败归一为 `{error:'bad_request', reason:'validation_failed', fields:{字段: 原文}}`，并统一未预期异常为 500 `{error:'internal_error'}`；② 登录/注册页前端预校验 + 中文提示（用户名/密码规则直接显示在输入框下）；③ 顺带把 `Failed to fetch` 这类底层报错翻译成"连不上服务器…" |
+| 2 | **注册成功后首页显示"读取任务失败"，看不到"去创建家庭"引导**（实际卡住） | 新注册家长 `familyId=NULL`，而 `GET /tasks` 对"parent 但无家庭"抛 **403**；今日页先渲染任务错误卡，把家庭引导顶掉 | ① 后端改为**无家庭 = 返回空列表**（`task.service.ts`；与审批列表同一原则："无家庭不是权限错误，而是空范围"）；② 前端把"未加入家庭"的引导**前置**于任务错误分支，并给出「创建家庭（1 步）」按钮与日程入口；③ 冒烟新增 2 条回归断言（无家庭家长 `GET /tasks` → 200 且 `[]`） |
+| 3 | 若用 `http://127.0.0.1:18080` 打开，会完全无法调 API（静默失败） | `CORS_ORIGINS` 只列了 `http://localhost:18080`；`localhost` 与 `127.0.0.1` 是**两个不同 Origin** | `.env`/`.env.example` 同时列出两者，并在模板里注明原因 |
+
+### 10.1 为什么原有验证没能提前发现
+
+| 缺口 | 说明 | 补强 |
+|---|---|---|
+| 冒烟不带 `Origin` | `Invoke-WebRequest` 不发 Origin、不触发预检，所以 **CORS 配错也全绿** | 冒烟新增 2 条预检断言（`OPTIONS` + `Origin` → 204 且 `Access-Control-Allow-Origin` 等于应用 Origin），总计 42 条 |
+| 冒烟只断言状态码，不看错误体 | 缺陷 #1 的错误体正是"状态码对、内容无用"，状态码断言抓不到 | 新增错误体契约（`{error,reason,fields}`）后，后续可按 `reason` 断言；本轮已人工核验两类错误体 |
+| "能用"阈值定得偏低 | 之前把"typecheck + build + API 冒烟全绿"当作可用，但**没有任何一步模拟真实浏览器入口与首次使用路径**（新用户 → 注册 → 空家庭 → 首页） | 冒烟新增"无家庭家长"路径；首次使用路径纳入回归 |
+
+### 10.2 本轮踩到的两个自身工具问题（已修）
+
+1. **冒烟脚本混入中文注释 → 静默丢断言**：脚本必须 ASCII-only（PS 5.1 把 UTF-8 当 GBK 读，乱码字节会**吞掉下一行**）。这次因此在本地少了 1 条断言且无任何报错。已加**两道守卫**：启动时检测文件是否非 ASCII（非 ASCII 直接 exit 2）；结尾校验实际执行断言数 == `$EXPECTED_CHECKS`（少一条即失败）。
+2. **全局异常过滤器的判断顺序写错**：Nest 默认校验体同样含 `error: 'Bad Request'` 字段，我最初"含 `error` 即原样透传"的分支先命中，导致归一化从未执行（已用真实请求验证并修正为"先识别 `message` 数组"）。
+
+> 结论：**接口能通 ≠ 产品能用**。这三条都只在"真人从浏览器第一次用"时暴露；已在冒烟里补上能在无浏览器环境复现的两条（CORS 预检、空家庭路径），并把错误体纳入契约。

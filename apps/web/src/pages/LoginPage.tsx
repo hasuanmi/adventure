@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { AUTH_REASON, UserRole } from '@huahua/shared-types';
+import { AUTH_REASON, ERROR_REASON, UserRole } from '@huahua/shared-types';
 import { Button } from '../components/ui/button';
 import { Panel } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -11,6 +11,38 @@ import { authApi } from '../lib/api/auth';
 import { setSession } from '../store/auth';
 
 type Mode = 'login' | 'register';
+
+// 用户名/密码规则（与 apps/api/src/auth/dto/register.dto.ts 保持一致）
+const USERNAME_MIN = 3;
+const USERNAME_MAX = 32;
+const PASSWORD_MIN = 6;
+
+/** 字段级校验错误 → 中文提示（服务端 fields 里是 class-validator 英文原文） */
+const FIELD_HINT: Record<string, string> = {
+  username: `用户名需 ${USERNAME_MIN}–${USERNAME_MAX} 个字符`,
+  password: `密码需 ${PASSWORD_MIN} 位以上`,
+};
+
+/** 把任意异常转成用户能看懂的中文（避免直出 "Bad Request" / "Failed to fetch"） */
+function describeError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.reason === ERROR_REASON.VALIDATION_FAILED) {
+      const fields = err.body.fields ?? {};
+      const hints = Object.keys(fields).map((key) => FIELD_HINT[key] ?? `${key}: ${fields[key]}`);
+      return hints.length > 0 ? hints.join('；') : '输入不符合要求，请检查用户名与密码';
+    }
+    if (err.reason === AUTH_REASON.USERNAME_TAKEN) return '用户名已被占用，换一个吧';
+    if (err.reason === AUTH_REASON.INVALID_CREDENTIALS) return '用户名或密码错误';
+    return err.reason ?? err.message;
+  }
+  if (err instanceof Error) {
+    if (/failed to fetch|networkerror|load failed/i.test(err.message)) {
+      return '连不上服务器：请确认后端已启动（docker compose ps 三个容器应为 Up）';
+    }
+    return err.message;
+  }
+  return '请求失败';
+}
 
 // 登录 / 注册（像素主题；docs/ui-reference.md §4 登录页）
 // 注册后统一由 Today 页的「家庭设置」引导创建/加入家庭（P2 补的正式入口）。
@@ -28,24 +60,37 @@ export function LoginPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!username.trim() || !password) {
+    const name = username.trim();
+    if (!name || !password) {
       setError('请填写用户名和密码');
       return;
+    }
+    // 前端先按后端同一套规则校验，省一次无谓的 400 往返，并给出中文原因
+    if (mode === 'register') {
+      if (name.length < USERNAME_MIN) {
+        setError(`用户名至少 ${USERNAME_MIN} 个字符（2 个汉字不够，建议用拼音，如 xiaoming）`);
+        return;
+      }
+      if (name.length > USERNAME_MAX) {
+        setError(`用户名不能超过 ${USERNAME_MAX} 个字符`);
+        return;
+      }
+      if (password.length < PASSWORD_MIN) {
+        setError(`密码至少 ${PASSWORD_MIN} 位`);
+        return;
+      }
     }
     setBusy(true);
     setError(null);
     try {
       if (mode === 'register') {
-        await authApi.register({ username: username.trim(), password, role });
+        await authApi.register({ username: name, password, role });
       }
-      const res = await authApi.login({ username: username.trim(), password });
+      const res = await authApi.login({ username: name, password });
       setSession(res.user, res.accessToken);
       navigate('/', { replace: true });
     } catch (err) {
-      const reason = err instanceof ApiError ? err.reason : undefined;
-      if (reason === AUTH_REASON.USERNAME_TAKEN) setError('用户名已被占用');
-      else if (reason === AUTH_REASON.INVALID_CREDENTIALS) setError('用户名或密码错误');
-      else setError(err instanceof Error ? err.message : '请求失败');
+      setError(describeError(err));
     } finally {
       setBusy(false);
     }
@@ -88,8 +133,13 @@ export function LoginPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
-              placeholder="如 xiaoming / mama"
+              placeholder={mode === 'register' ? '如 xiaoming / mama01（建议拼音）' : '如 xiaoming'}
             />
+            {mode === 'register' && (
+              <p className="mt-1 text-xs text-inkSoft">
+                {USERNAME_MIN}–{USERNAME_MAX} 个字符，登录用。建议用拼音；2 个汉字不够长。
+              </p>
+            )}
           </div>
           <div>
             <Label htmlFor="password">密码</Label>
@@ -99,8 +149,9 @@ export function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              placeholder="至少 6 位"
+              placeholder={mode === 'register' ? `至少 ${PASSWORD_MIN} 位` : '请输入密码'}
             />
+            {mode === 'register' && <p className="mt-1 text-xs text-inkSoft">至少 {PASSWORD_MIN} 位，家长和孩子都用它登录。</p>}
           </div>
 
           {mode === 'register' && (

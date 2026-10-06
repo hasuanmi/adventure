@@ -7,6 +7,15 @@ export interface ApiErrorBody {
   fields?: Record<string, string>;
 }
 
+/** 与业务模块无关的通用 reason（服务端全局异常过滤器与客户端共用） */
+export const ERROR_REASON = {
+  /** 请求 DTO 校验失败；具体字段与原文见 `fields` */
+  VALIDATION_FAILED: 'validation_failed',
+  /** 未预期的服务端异常 */
+  INTERNAL: 'internal_error',
+} as const;
+export type ErrorReason = (typeof ERROR_REASON)[keyof typeof ERROR_REASON];
+
 /** 客户端异常（Web/Mobile 共用） */
 export class ApiError extends Error {
   readonly status: number;
