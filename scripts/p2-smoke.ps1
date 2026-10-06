@@ -58,14 +58,21 @@ function Http($method, $path, $token, $body) {
     $resp = Invoke-WebRequest @params
     return [pscustomobject]@{ Status = [int]$resp.StatusCode; Text = [string]$resp.Content }
   } catch {
-    $r = $_.Exception.Response
-    if ($r) {
-      $reader = New-Object System.IO.StreamReader($r.GetResponseStream())
+    # 错误响应体取值必须同时兼容 Windows PowerShell 5.1 与 PowerShell 7：
+    #   PS 5.1: Exception.Response 是 HttpWebResponse（有 GetResponseStream）
+    #   PS 7   : Exception.Response 是 HttpResponseMessage（无 GetResponseStream），body 在 ErrorDetails.Message
+    $resp = $_.Exception.Response
+    $status = 0
+    $text = ""
+    if ($resp) { $status = [int]$resp.StatusCode }
+    if ($_.ErrorDetails -and $_.ErrorDetails.Message) { $text = [string]$_.ErrorDetails.Message }
+    if ((-not $text) -and $resp -and ($resp.PSObject.Methods.Name -contains 'GetResponseStream')) {
+      $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
       $text = $reader.ReadToEnd()
       $reader.Dispose()
-      return [pscustomobject]@{ Status = [int]$r.StatusCode; Text = $text }
     }
-    return [pscustomobject]@{ Status = 0; Text = $_.Exception.Message }
+    if (-not $resp) { $text = $_.Exception.Message }
+    return [pscustomobject]@{ Status = $status; Text = $text }
   }
 }
 
