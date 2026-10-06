@@ -45,15 +45,6 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
           className="group relative flex flex-col items-center overflow-visible transition active:translate-y-1"
           aria-label={claimed ? '今日成长卡已领取，查看成长卡' : '领取今日成长卡'}
         >
-          {/* 放射状散射光（像素素材，缓慢旋转；纯装饰，不参与点击） */}
-          <img
-            src="/ui/badge-rays.png"
-            alt=""
-            aria-hidden
-            data-growth-card-rays
-            style={{ width: 200, height: 200 }}
-            className="pixel-blink pointer-events-none absolute object-contain [image-rendering:pixelated]"
-          />
 
           {/* 圆形像素徽章（居中主体） */}
           <span
@@ -62,6 +53,14 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
               'relative grid h-14 w-14 place-items-center overflow-visible rounded-full border-[3px] border-ink',
             )}
           >
+            <img
+              src="/ui/badge-rays.png"
+              alt=""
+              aria-hidden
+              data-growth-card-rays
+              style={{ width: 200, height: 200 }}
+              className="pixel-blink pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 object-contain [image-rendering:pixelated]"
+            />
             <img
               src="/icons/chest.png"
               alt=""
