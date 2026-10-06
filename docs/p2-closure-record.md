@@ -148,7 +148,7 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 
 ## 8. 后续建议（按价值排序）
 
-1. ~~装 git + 建基线提交 + CI~~ **已完成**。下一步：把仓库推到一个远端（GitHub/GitLab）并保护 `main`，CI 才会真正跑起来。
+1. ~~装 git + 建基线提交 + CI~~ **已完成**，仓库已推送到 `github.com/hasuanmi/adventure` 且 **CI 全绿**。下一步：为 `main` 开分支保护（要求 CI 通过才可合并）。
 2. **补 lint**：加 ESLint + Prettier 并接入 CI（文档 §13 的 lint 门禁目前仍缺）。
 3. **统一错误体**：加全局 ExceptionFilter，让 class-validator 的 400 也返回 `{error, reason, fields}`（前端 `toApiError` 已按此契约实现，现在是空转）。
 4. **P2 剩余 UI**：TaskCard 可展开面板（进度/完成标准/行内操作）、本周打卡位、成长页（`/growth/me` 接口已具备）。
@@ -164,8 +164,21 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 | 版本控制 | 首次建立 Git 仓库（此前无 git，无历史、无回滚、无 diff）；`git init -b main` + 基线提交 `99e0fb7`（163 文件）；`core.autocrlf=false` |
 | Git 安装 | winget 安装 Git **2.55.0.5**（`C:\Program Files\Git\cmd\git.exe`，已在机器 PATH） |
 | 行尾 | 统一 LF（135 文件 CRLF→LF）+ `.gitattributes`（`* text=auto eol=lf`，二进制显式排除） |
-| 提交身份 | 仓库级 `user.name=huahua-dev` / `user.email=dev@huahua.local`（**建议改成你自己的身份**：`git config user.name "..."`、`git config user.email "..."`） |
+| 提交身份 | 仓库级 `hasuanmi` / `hasuanmi@users.noreply.github.com`（作者身份在**首次推送前**改写完成，避免日后 force-push） |
 | 忽略项 | 复用既有 `.gitignore`：`node_modules/`、`dist/`、`.env`、`uploads/` 等；`git check-ignore` 已复核，暂存区 0 个 node_modules/dist 文件 |
-| CI | 新增 `.github/workflows/ci.yml`：① `verify`（install → shared-types build → `pnpm typecheck` → api build → web build）② `smoke`（postgres:16 service → migrate → seed → api build → 起 API 等 health → 装 psql → 跑 `scripts/p2-smoke.ps1`，失败打印 API 日志） |
-| 冒烟脚本可移植 | `scripts/p2-smoke.ps1` 支持 `SMOKE_BASE` / `PSQL` / `PG*` 覆盖；无 psql 时 DB 断言 SKIP 并提示；已在 Linux CI 语义下可运行（pwsh 步骤） |
+| CI | 新增 `.github/workflows/ci.yml`：① `verify`（install → shared-build → prisma generate → `pnpm typecheck` → api build → web build）② `smoke`（postgres:16 service → migrate → seed → api build → 起 API 等 health → 装 psql → 跑 `scripts/p2-smoke.ps1`，失败打印 API 日志） |
+| 冒烟脚本可移植 | `scripts/p2-smoke.ps1` 支持 `SMOKE_BASE` / `PSQL` / `PG*` 覆盖；无 psql 时 DB 断言 SKIP 并提示；兼容 Windows PowerShell 5.1 与 PowerShell 7 |
 | 验收脚本端口 | `scripts/p1-acceptance.ps1` 的 `$BASE` 改为默认 `http://localhost:18080/api`，并支持 `$env:ACCEPT_BASE` 覆盖 |
+| 远端仓库 | `https://github.com/hasuanmi/adventure`（`origin`，HTTPS；如需改 SSH：`git remote set-url origin git@github.com:hasuanmi/adventure.git`） |
+| CI 结果 | 推送后 **run #2 两个 job 全绿**（`typecheck + build`、`API smoke`）；CI 日志内冒烟为 `pass=38 fail=0 skip=0 db=True`（DB 断言真实执行，非跳过） |
+
+### 9.1 CI 首轮（run #1）抓到的两个真问题（记录为证）
+
+首轮 CI **两个 job 都红**，暴露出本地环境掩盖的问题——这正是引入 CI 的价值：
+
+| # | 现象 | 根因 | 修复 |
+|---|---|---|---|
+| 1 | `verify` 的 api typecheck 27 条报错（`PrismaClientKnownRequestError does not exist on type 'typeof Prisma'`、`tx` 隐式 any 等） | CI 全新安装**没有生成 Prisma Client**；本机开发机早就生成过，所以本地 `tsc` 全绿掩盖了它 | `verify` job 在 typecheck 前加 `prisma:generate` |
+| 2 | `smoke` 中所有 `Code(...)` 断言拿到的状态码为空（`got=`） | 错误分支用了 `Exception.Response.GetResponseStream()`——那是 Windows PowerShell 5.1 / .NET Framework 的 API；CI 的 `pwsh` 7 上 `HttpResponseMessage` 没有该方法 | 改为双版本兼容：优先 `ErrorDetails.Message`，`GetResponseStream` 仅在方法存在时兜底 |
+
+> 教训：**"本地能跑"不等于"能移植"**。脚本/构建的可移植性只能由异环境执行证明（本地 PS 5.1 全绿 ≠ PS 7 可用）。
