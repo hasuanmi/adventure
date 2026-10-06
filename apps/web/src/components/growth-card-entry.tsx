@@ -42,7 +42,7 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
           data-growth-card-entry
           data-growth-card-claimed={claimed ? 'true' : 'false'}
           onClick={() => setOpen(true)}
-          className="group relative grid place-items-center overflow-visible transition active:translate-y-1"
+          className="group relative flex flex-col items-center overflow-visible transition active:translate-y-1"
           aria-label={claimed ? '今日成长卡已领取，查看成长卡' : '领取今日成长卡'}
         >
           {/* 放射状散射光（像素素材，缓慢旋转；纯装饰，不参与点击） */}
@@ -77,13 +77,11 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
               </span>
             )}
           </span>
+          <span className="mt-1.5 text-sm font-extrabold text-panelLight">每日成长卡</span>
+          <span className="text-[11px] text-panelLight/75">
+            {claimed ? '✓ 今日已领取' : '完成今日冒险后领取'}
+          </span>
         </button>
-
-        {/* 标签：写在徽章**下方**，整体居中 */}
-        <span className="mt-1.5 text-sm font-extrabold text-panelLight">每日成长卡</span>
-        <span className="text-[11px] text-panelLight/75">
-          {claimed ? '✓ 今日已领取' : '完成今日冒险后领取'}
-        </span>
 
         {claimed && (
           <Link to="/growth-cards" className="mt-0.5 text-[11px] font-bold text-panelLight/80 underline">
