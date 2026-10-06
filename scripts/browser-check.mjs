@@ -19,6 +19,7 @@ const argOf = (name, fallback) => {
 const BASE = argOf('base', 'http://localhost:18080');
 const OUT = argOf('out', join(process.cwd(), 'ui-shots'));
 const API = `${BASE}/api`;
+const ROOT = process.cwd();
 const STAMP = Math.floor(100000 + Math.random() * 899999);
 const PARENT = `ui_p_${STAMP}`;
 const CHILD = `ui_c_${STAMP}`;
@@ -1460,8 +1461,8 @@ async function main() {
     check('学习中心含「错题本」入口', hub.wrongQuestions, true);
     check('学习中心含「AI 解题」入口', hub.aiTutor, true);
 
-    // 录入一道错题（UI 全流程）
-    await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions/new` });
+    // 录入一道错题（UI 全流程）→ 直接录入表单（上传页为 /new，手工表单为 /manual）
+    await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions/manual` });
     await cdp.waitFor('[data-save-wrong-question]');
     const wqText = `勾股定理测试题 ${STAMP}：直角三角形两直角边 3 和 4，求斜边`;
     await cdp.evaluate(`(() => {
@@ -1582,6 +1583,107 @@ async function main() {
       check('未配置时调用识题返回明确错误（502）', aiCall.status, 502);
       check('识题未配置 reason 为 ai_not_configured', aiCall.json?.reason, 'ai_not_configured');
     }
+
+    // ---------- 13i. 错题本四入口 + 上传新题（三模式）+ 标签管理 + 统计中心 ----------
+    await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions` });
+    await cdp.waitFor('[data-wrong-question-nav]');
+    const navItems = await cdp.evaluate(
+      `[...document.querySelectorAll('[data-wrong-question-nav] [data-nav-item]')].map((a) => a.textContent.trim())`,
+    );
+    console.log(`      错题本四入口：${navItems.join(' / ')}`);
+    check(
+      '错题本顶部四入口齐全（上游首页同款）',
+      ['上传新题', '查看错题本', '标签管理', '统计中心'].every((t) => navItems.includes(t)),
+      true,
+    );
+
+    // 上传新题页：三个输入模式 + 拖拽区 + 屏幕截图
+    await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions/new` });
+    await cdp.waitFor('[data-upload-zone]');
+    const uploadUi = await cdp.evaluate(`(() => {
+      const text = String(document.body.innerText);
+      return {
+        tabs: [...document.querySelectorAll('[data-upload-tab]')].map((b) => b.getAttribute('data-upload-tab')),
+        zoneText: (document.querySelector('[data-upload-zone]')?.innerText ?? '').replace(/\\n/g, ' '),
+        hasCapture: Boolean(document.querySelector('[data-screen-capture]')),
+        hint: text.includes('AI 未配置'),
+      };
+    })()`);
+    console.log(`      上传页：${JSON.stringify(uploadUi)}`);
+    check('三个输入模式齐全（拍照上传/AI解题/直接录入）', uploadUi.tabs.join(',') === 'image,text,direct', true);
+    check(
+      '拖拽区文案与上游一致（AI 智能解析 / 拖拽图片到此处 / JPG、PNG）',
+      uploadUi.zoneText.includes('AI 智能解析') &&
+        uploadUi.zoneText.includes('拖拽图片到此处') &&
+        uploadUi.zoneText.includes('JPG'),
+      true,
+    );
+    check('含「屏幕截图」按钮', uploadUi.hasCapture, true);
+    await cdp.shot('30-wrong-question-upload');
+
+    // 真实上传：用 CDP 把本地 PNG 塞进 file input（等价拖拽）→ 点击 AI 解析
+    await cdp.send('DOM.enable', {});
+    const doc = await cdp.send('DOM.getDocument', { depth: -1 });
+    const inputNode = await cdp.send('DOM.querySelector', {
+      nodeId: doc.root.nodeId,
+      selector: '[data-upload-input]',
+    });
+    const uploadFixture = `${ROOT}/apps/web/public/cards/card-02.png`;
+    await cdp.send('DOM.setFileInputFiles', { nodeId: inputNode.nodeId, files: [uploadFixture] });
+    await sleep(900);
+    check('选择图片后出现预览', await cdp.evaluate(`Boolean(document.querySelector('[data-upload-preview]'))`), true);
+    await cdp.shot('31-upload-preview');
+
+    // 直接录入（不经 AI）→ 表单页
+    await cdp.clickSelector('[data-upload-tab="direct"]');
+    await sleep(300);
+    await cdp.clickSelector('[data-direct-entry]');
+    await sleep(800);
+    check('「直接录入」进入手工表单', String(await cdp.evaluate('location.pathname')).endsWith('/manual'), true);
+
+    // 标签管理：新建 + 删除自定义标签
+    await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions/tags` });
+    await cdp.waitFor('[data-create-tag]');
+    const tagName = `自测标签${STAMP}`;
+    await cdp.evaluate(`(() => {
+      const el = document.querySelector('[data-new-tag-name]');
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, ${JSON.stringify(tagName)});
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    await cdp.clickSelector('[data-create-tag]');
+    await sleep(1200);
+    const tagCreatedUi = await cdp.evaluate(
+      `String(document.body.innerText).includes(${JSON.stringify(tagName)})`,
+    );
+    check('标签管理可新建自定义标签', tagCreatedUi, true);
+    const createdTagId = await cdp.evaluate(
+      `(() => { const rows = [...document.querySelectorAll('[data-delete-tag]')]; const hit = rows.find((b) => (b.closest('div')?.innerText ?? '').includes(${JSON.stringify(tagName)})); return hit ? hit.getAttribute('data-delete-tag') : null; })()`,
+    );
+    if (createdTagId) {
+      await cdp.evaluate(
+        `document.querySelector('[data-delete-tag="${createdTagId}"]').click()`,
+      );
+      await sleep(1200);
+      check(
+        '标签管理可删除自定义标签',
+        await cdp.evaluate(`!String(document.body.innerText).includes(${JSON.stringify(tagName)})`),
+        true,
+      );
+    }
+    await cdp.shot('32-knowledge-tags');
+
+    // 统计中心
+    await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions/stats` });
+    await cdp.waitFor('[data-stat-total]');
+    const statsUi = await cdp.evaluate(`(() => ({
+      total: document.querySelector('[data-stat-total]')?.textContent ?? '',
+      reviews: document.querySelector('[data-stat-reviews]')?.textContent ?? '',
+      bars: document.querySelectorAll('[data-stat-trend] span').length,
+    }))()`);
+    console.log(`      统计中心：${JSON.stringify(statsUi)}`);
+    check('统计中心渲染总量/复习次数', Number(statsUi.total) >= 0 && statsUi.reviews !== '', true);
+    check('统计中心渲染近 30 天趋势', Number(statsUi.bars), 30);
+    await cdp.shot('33-stats');
   } finally {
     clearTimeout(watchdog);
     try {

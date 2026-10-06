@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   MASTERY_LABELS,
@@ -10,6 +10,7 @@ import {
 } from '@huahua/shared-types';
 import { Panel } from '../components/ui/card';
 import { ApiError } from '../lib/api/client';
+import { filesApi } from '../lib/api/files';
 import { knowledgeTagsApi, wrongQuestionsApi } from '../lib/api/wrong-questions';
 import { subjectMeta } from '../lib/constants';
 
@@ -37,15 +38,65 @@ const EMPTY: CreateWrongQuestionRequest = {
   tagIds: [],
 };
 
+/** 从「上传新题」页带过来的 AI 结果（上游：AI 解析后进入可编辑确认表单） */
+interface UploadState {
+  prefill?: Partial<CreateWrongQuestionRequest>;
+  knowledgePoints?: string[];
+  imageKey?: string | null;
+}
+
 /** 录入 / 编辑错题（字段与上游 ErrorItem 一一对应） */
 export function WrongQuestionFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const uploadState = (location.state ?? null) as UploadState | null;
   const [form, setForm] = useState<CreateWrongQuestionRequest>(EMPTY);
   const [error, setError] = useState<string | null>(null);
   const [newTag, setNewTag] = useState('');
+  const [pendingPoints, setPendingPoints] = useState<string[]>([]);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  // AI 结果预填（仅新建时；用户仍可逐字段修改后再保存）
+  useEffect(() => {
+    if (isEdit || !uploadState) return;
+    setForm((f) => ({
+      ...f,
+      ...uploadState.prefill,
+      originalImageKey: uploadState.imageKey ?? f.originalImageKey ?? null,
+    }));
+    setPendingPoints(uploadState.knowledgePoints ?? []);
+    // 仅首次挂载应用，避免用户编辑时被重置
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit]);
+
+  // 已上传图片的本地预览（存储走鉴权接口，<img> 需要 blob URL）
+  useEffect(() => {
+    const key = form.originalImageKey;
+    if (!key) {
+      setImagePreview(null);
+      return;
+    }
+    let revoked: string | null = null;
+    let cancelled = false;
+    void filesApi
+      .objectUrl(key)
+      .then((url) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        revoked = url;
+        setImagePreview(url);
+      })
+      .catch(() => setImagePreview(null));
+    return () => {
+      cancelled = true;
+      if (revoked) URL.revokeObjectURL(revoked);
+    };
+  }, [form.originalImageKey]);
 
   const existing = useQuery({
     queryKey: ['wrong-question', id],
@@ -146,7 +197,40 @@ export function WrongQuestionFormPage() {
           </select>
         </label>
 
-        {field('题干（必填）', 'questionText', 4, '把题目抄进来，或以后用 AI 识题自动填入')}
+        {imagePreview && (
+          <div data-form-image>
+            <span className="text-xs font-bold text-inkSoft">题目图片（已上传）</span>
+            <img
+              src={imagePreview}
+              alt="题目图片"
+              className="mt-0.5 max-h-56 border-2 border-ink bg-panelLight object-contain"
+            />
+          </div>
+        )}
+
+        {pendingPoints.length > 0 && (
+          <div data-ai-knowledge-points>
+            <span className="text-xs font-bold text-inkSoft">AI 识别的知识点（点击可加为标签）</span>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {pendingPoints.map((point) => (
+                <button
+                  key={point}
+                  type="button"
+                  data-pending-point={point}
+                  onClick={() => {
+                    setNewTag(point);
+                    setPendingPoints((list) => list.filter((p) => p !== point));
+                  }}
+                  className="border-2 border-ink bg-panelLight px-2 py-0.5 text-[11px] font-bold"
+                >
+                  + {point}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {field('题干（必填）', 'questionText', 4, '把题目抄进来，或用「上传新题」让 AI 自动填入')}
         {field('正确答案', 'answerText', 2)}
         {field('解析', 'analysis', 3)}
         {field('学生的错误答案 / 过程', 'wrongAnswerText', 2)}

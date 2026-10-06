@@ -9,6 +9,7 @@ import { Empty } from '../components/ui/empty';
 import { Skeleton } from '../components/ui/skeleton';
 import { wrongQuestionsApi } from '../lib/api/wrong-questions';
 import { subjectMeta } from '../lib/constants';
+import { WrongQuestionNav } from '../components/wrong-question-nav';
 
 const PAGE_SIZE = 18; // 与上游一致
 
@@ -42,14 +43,15 @@ export function WrongQuestionListPage() {
 
   return (
     <div className="space-y-4">
+      <WrongQuestionNav />
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-extrabold tracking-widest">错题本</h1>
+        <h1 className="text-lg font-extrabold tracking-widest">查看错题本</h1>
         <Link
           to="/learning/wrong-questions/new"
           data-wrong-question-new
           className="inline-flex items-center gap-1 border-2 border-ink bg-accent px-3 py-1.5 text-xs font-extrabold text-white shadow-pixel active:translate-y-0.5"
         >
-          <Plus className="h-3.5 w-3.5" /> 录入错题
+          <Plus className="h-3.5 w-3.5" /> 上传新题
         </Link>
       </div>
 

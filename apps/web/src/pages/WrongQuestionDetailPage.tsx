@@ -7,6 +7,7 @@ import { Skeleton } from '../components/ui/skeleton';
 import { ApiError } from '../lib/api/client';
 import { wrongQuestionsApi } from '../lib/api/wrong-questions';
 import { subjectMeta } from '../lib/constants';
+import { WrongQuestionNav } from '../components/wrong-question-nav';
 
 /** 掌握度三态配色（0 新题=橙 / 1 复习中=琥珀 / 2 已掌握=绿，与列表 Badge 一致） */
 const MASTERY_COLORS: Record<MasteryLevel, string> = {
@@ -94,6 +95,7 @@ export function WrongQuestionDetailPage() {
 
   return (
     <div className="space-y-4">
+      <WrongQuestionNav />
       <div className="flex items-center justify-between">
         <Link to="/learning/wrong-questions" className="text-sm font-bold text-inkSoft hover:text-ink">
           ← 返回错题本

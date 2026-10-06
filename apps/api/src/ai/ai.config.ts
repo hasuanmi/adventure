@@ -8,6 +8,9 @@ export interface AiConfig {
   visionModel: string;
   apiKey: string;
   timeoutMs: number;
+  /** 最大输出 token：实测 deepseek-flash 会把额度先用于 reasoning_content，
+   *  太小会导致 content 为空（之前 16 tokens 时返回空串）→ 默认给足 */
+  maxTokens: number;
 }
 
 export function readAiConfig(): AiConfig {
@@ -23,6 +26,7 @@ export function readAiConfig(): AiConfig {
     apiKey,
     // 上游 timeouts.analyze = 180000ms；我们保持同等容忍度，但改造为可配置
     timeoutMs: Number(process.env.AI_TIMEOUT_MS ?? 180_000),
+    maxTokens: Number(process.env.AI_MAX_TOKENS ?? 4096),
   };
 }
 

@@ -87,6 +87,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
             { role: 'user', content: params.vision || params.imageBase64 ? content : params.user },
           ],
           temperature: 0.2,
+          max_tokens: this.config.maxTokens,
         }),
         signal: controller.signal,
       });
@@ -100,10 +101,17 @@ export class OpenAiCompatibleProvider implements AiProvider {
       }
 
       const json = (await res.json()) as {
-        choices?: { message?: { content?: string } }[];
+        choices?: { message?: { content?: string; reasoning_content?: string }; finish_reason?: string }[];
       };
-      const text = json.choices?.[0]?.message?.content;
-      if (!text) throw new AiProviderError(AI_ERROR.RESPONSE, 'empty completion');
+      const choice = json.choices?.[0];
+      const text = choice?.message?.content?.trim();
+      if (!text) {
+        // 实测：max_tokens 太小或纯 reasoning 输出时 content 可能为空 → 明确报错（不返回空解析结果）
+        throw new AiProviderError(
+          AI_ERROR.RESPONSE,
+          `empty completion (finish=${choice?.finish_reason ?? 'unknown'})`,
+        );
+      }
       return text;
     } catch (error) {
       if (error instanceof AiProviderError) throw error;

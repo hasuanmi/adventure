@@ -900,3 +900,62 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 | 删除 | 软删除，列表不再出现 |
 
 > 过程中我自己犯并修掉的两处：① 查询参数 DTO 用了 `@IsInt()` 但 Nest 未开隐式转换 → 列表 400（改用 `@Type(() => Number)`）；② 底栏网格写死 `grid-cols-2`，加第三格后「学习」换行（改为按 nav 长度生成列数，并加"同一行"断言）。
+
+---
+
+## 26. P6-2 / P6-3：文件上传 + AI 识题接通 + 上游首页功能补齐（2026-10-06）
+
+用户给了 API Key 与 `AI_BASE_URL=https://api.deepseek.com` / `AI_MODEL=deepseek-flash`，并要求"截图里的功能都要在"。
+
+### 26.1 AI 真接通（**已用真模型验证**）
+
+| 项 | 结果 |
+|---|---|
+| `GET https://api.deepseek.com/models` | 200，网关可用模型：`deepseek-flash`、`deepseek-v4-pro` |
+| 文字识题（`POST /api/ai/analyze` {text}） | **201 / 5.2s**，9 个字段全部解析正确：`subject=math`、`questionText`、`answerText=7`、`analysis`、`mistakeAnalysis`、`knowledgePoints`、`mistakeStatus=wrong_attempt`、`requires_image=false` |
+| 图片识题（`{imageBase64}`） | **201 / 3.4s**，对非试题图片给出合理回答（"图片中没有出现任何题目文字…请重新上传含题干的图片"）→ **视觉链路可用** |
+| 走过的坑 | 首次探测 `content` 为空：该模型会把额度先用于 `reasoning_content`，`max_tokens=16` 时输出被截断 → 默认 `AI_MAX_TOKENS=4096`；`content` 为空时**明确报错**而不是返回空解析 |
+| 安全 | 密钥只进 `.env`（已 gitignore、未跟踪）→ compose 注入容器；`/ai/status` 需登录；断言「响应绝不含 `sk-`」；密钥不进前端、不写日志 |
+
+### 26.2 上传接口（P6-2，上游是 base64 直存 DB → 我们按硬基线改磁盘 + key）
+
+`POST /api/files`（multipart，鉴权，白名单 JPG/PNG/WebP，≤10MB）→ `{key,url,size,mime}`，落盘 `{UPLOAD_DIR}/{familyId}/{scope}/{uuid}.{ext}`；
+`GET /api/files?key=`（鉴权读取，**仅同 family**）。冒烟实测：
+
+| 用例 | 结果 |
+|---|---|
+| 上传 PNG | 201，`key={familyId}/wrong-question/{uuid}.png` |
+| 带鉴权取回 | 200，**字节与源文件完全一致**（`match=true`），`Content-Type: image/png` |
+| 匿名取回 | **401** |
+| 路径穿越 `../../etc/passwd` | **404** |
+| 传 txt | **400** `unsupported_file_type` |
+| 无 family | **400** `family_required` |
+
+前端：`compressImage`（最长边 1920 / 质量 0.8 / 目标 ≤1MB，对齐上游 upload-zone）+ `filesApi.objectUrl`（`<img>` 不能带 Bearer → 走 blob）。
+
+### 26.3 上游首页功能对照（用户截图的"这些功能都要在"）
+
+| 上游 | 本项目 | 状态 |
+|---|---|---|
+| 顶部四入口：上传新题 / 查看错题本 / 标签管理 / 统计中心 | `WrongQuestionNav`（四页共用） | ✅ |
+| 三输入模式：UploadZone / TextInputZone / DirectTextEditor | `拍照上传` / `AI 解题` / `直接录入` 三 tab | ✅ |
+| 拖拽区「AI 智能解析 / 拖拽图片到此处，或点击浏览 / 支持 JPG、PNG（最大 5MB）」 | 同文案 + 拖拽高亮 + 预览 | ✅ |
+| 屏幕截图（getDisplayMedia） | 同（非 https/localhost 或不支持时给明确提示） | ✅ |
+| AI 解析结果 → 可编辑确认表单 | AI 9 字段映射 → 进 `/manual` 预填（含知识点 chips 可一键变标签） | ✅ |
+| 标签管理页（系统 + 自定义增删） | `/learning/wrong-questions/tags` | ✅ |
+| 统计中心（`/api/analytics` + `/api/stats/practice` 口径） | `GET /wrong-questions/stats` + 像素风统计页（总量/学科/掌握度/近 30 天/复习结果） | ✅ |
+| AI 重解 `/api/reanswer` | `POST /ai/reanswer`（6 标签） | ✅ 后端就绪 |
+| 练习/相似题、导入导出、批量删除、GeoGebra、标签建议与统计 | — | 🟡 见 `docs/p6-fidelity-audit.md` §2 |
+
+### 26.4 验证
+
+`browser-check` 181 → **190 条全绿（74 秒）**，本批新增 9 条并全部真机执行（含**真实 DeepSeek 调用**）：
+
+四入口齐全 ✓；三模式 `image,text,direct` ✓；拖拽区文案与上游一致 ✓；屏幕截图按钮存在 ✓；
+用 CDP 注入本地 PNG（等价拖拽）→ 出现预览 ✓；`直接录入` → `/manual` ✓；
+标签管理新建+删除自定义标签 ✓；统计中心渲染总量/复习次数/近 30 天 30 根柱子 ✓；
+`/ai/analyze` 真调用返回 `raw + fields` ✓。（CI 无密钥时自动走 `ai_not_configured` 分支，不会红。）
+
+### 26.5 遗留（下一批）
+
+练习与相似题、练习统计清空、导入导出、批量删除/清空、GeoGebra、标签建议与标签统计、用户档案（学段/入学年）、打印预览。

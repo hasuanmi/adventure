@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { WrongQuestionDto, WrongQuestionListDto, WrongQuestionReviewDto } from '@huahua/shared-types';
+import { WrongQuestionDto, WrongQuestionListDto, WrongQuestionReviewDto, WrongQuestionStatsDto } from '@huahua/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard, RequestActor } from '../auth/jwt-auth.guard';
 import {
@@ -32,6 +32,11 @@ export class WrongQuestionController {
     @Body() dto: CreateWrongQuestionDto,
   ): Promise<WrongQuestionDto> {
     return this.wrongQuestion.create(actor, dto);
+  }
+
+  @Get('stats')
+  async stats(@CurrentUser() actor: RequestActor): Promise<WrongQuestionStatsDto> {
+    return this.wrongQuestion.stats(actor);
   }
 
   @Get(':id')

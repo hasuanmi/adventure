@@ -13,6 +13,7 @@ import {
   WrongQuestionListDto,
   WrongQuestionListQuery,
   WrongQuestionReviewDto,
+  WrongQuestionStatsDto,
   questionDedupeKey,
 } from '@huahua/shared-types';
 import type { KnowledgeTag, WrongQuestion } from '@prisma/client';
@@ -264,6 +265,58 @@ export class WrongQuestionService {
       completedAt: row.completedAt ? row.completedAt.toISOString() : null,
       isCorrect: row.isCorrect,
       createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  /** 统计（对照上游 /api/analytics + /api/stats/practice 的口径：按学科/掌握度/时间分布 + 复习与练习） */
+  async stats(actor: RequestActor): Promise<WrongQuestionStatsDto> {
+    const { familyId } = this.requireFamily(actor);
+    const childId = await this.resolveChildId(actor, undefined);
+    const where = { familyId, childId, deletedAt: null };
+
+    const [total, bySubjectRaw, byMasteryRaw, byPaperRaw, reviews, practiceRaw, rows] = await Promise.all([
+      this.prisma.wrongQuestion.count({ where }),
+      this.prisma.wrongQuestion.groupBy({ by: ['subject'], where, _count: { _all: true } }),
+      this.prisma.wrongQuestion.groupBy({ by: ['masteryLevel'], where, _count: { _all: true } }),
+      this.prisma.wrongQuestion.groupBy({ by: ['paperLevel'], where, _count: { _all: true } }),
+      this.prisma.wrongQuestionReview.groupBy({
+        by: ['isCorrect'],
+        where: { familyId, wrongQuestion: { childId } },
+        _count: { _all: true },
+      }),
+      this.prisma.practiceRecord.groupBy({ by: ['subject', 'isCorrect'], where: { familyId, childId }, _count: { _all: true } }),
+      this.prisma.wrongQuestion.findMany({ where, select: { createdAt: true } }),
+    ]);
+
+    // 近 30 天按日分布（上游统计页的时间趋势）
+    const days: { date: string; count: number }[] = [];
+    const today = new Date();
+    for (let i = 29; i >= 0; i -= 1) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      days.push({ date: d.toISOString().slice(0, 10), count: 0 });
+    }
+    const index = new Map(days.map((d) => [d.date, d]));
+    for (const row of rows) {
+      const key = row.createdAt.toISOString().slice(0, 10);
+      const hit = index.get(key);
+      if (hit) hit.count += 1;
+    }
+
+    return {
+      total,
+      bySubject: bySubjectRaw.map((r) => ({ subject: r.subject ?? 'unknown', count: r._count._all })),
+      byMastery: byMasteryRaw.map((r) => ({ masteryLevel: r.masteryLevel, count: r._count._all })),
+      byPaper: byPaperRaw.map((r) => ({ paperLevel: r.paperLevel ?? 'unknown', count: r._count._all })),
+      reviewCorrect: reviews.find((r) => r.isCorrect === true)?._count._all ?? 0,
+      reviewWrong: reviews.find((r) => r.isCorrect === false)?._count._all ?? 0,
+      reviewPending: reviews.find((r) => r.isCorrect === null)?._count._all ?? 0,
+      practice: practiceRaw.map((r) => ({
+        subject: r.subject ?? 'unknown',
+        isCorrect: r.isCorrect,
+        count: r._count._all,
+      })),
+      last30Days: days,
     };
   }
 

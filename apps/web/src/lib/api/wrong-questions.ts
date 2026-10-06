@@ -4,6 +4,7 @@ import {
   WrongQuestionDto,
   WrongQuestionListDto,
   WrongQuestionReviewDto,
+  WrongQuestionStatsDto,
 } from '@huahua/shared-types';
 import { request } from './client';
 
@@ -55,6 +56,7 @@ export const wrongQuestionsApi = {
       body: JSON.stringify({ userNotes }),
     }),
   reviews: (id: string) => request<WrongQuestionReviewDto[]>(`/wrong-questions/${id}/reviews`),
+  stats: () => request<WrongQuestionStatsDto>('/wrong-questions/stats'),
   addReview: (id: string, body: { scheduledFor?: string; completedAt?: string | null; isCorrect?: boolean | null }) =>
     request<WrongQuestionReviewDto>(`/wrong-questions/${id}/reviews`, {
       method: 'POST',

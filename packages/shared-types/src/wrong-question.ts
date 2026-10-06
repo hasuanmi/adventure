@@ -124,6 +124,19 @@ export interface WrongQuestionListDto {
   pageSize: number;
 }
 
+/** 统计（对照上游 /api/analytics + /api/stats/practice 的口径） */
+export interface WrongQuestionStatsDto {
+  total: number;
+  bySubject: { subject: string; count: number }[];
+  byMastery: { masteryLevel: number; count: number }[];
+  byPaper: { paperLevel: string; count: number }[];
+  reviewCorrect: number;
+  reviewWrong: number;
+  reviewPending: number;
+  practice: { subject: string; isCorrect: boolean | null; count: number }[];
+  last30Days: { date: string; count: number }[];
+}
+
 export interface CreateWrongQuestionRequest {
   childId?: string;
   subject?: string | null;
@@ -176,6 +189,31 @@ export const WRONG_QUESTION_REASON = {
   TAG_IN_USE: 'knowledge_tag_in_use',
 } as const;
 export type WrongQuestionReason = (typeof WRONG_QUESTION_REASON)[keyof typeof WRONG_QUESTION_REASON];
+
+// ---------------------------------------------------------------------------
+// 文件上传（本项目新增；上游用 base64 直存 DB，见 docs/p6-fidelity-audit.md §1.1）
+// ---------------------------------------------------------------------------
+
+export const FILE_REASON = {
+  FAMILY_REQUIRED: 'family_required',
+  NO_FILE: 'file_required',
+  UNSUPPORTED_TYPE: 'unsupported_file_type',
+  TOO_LARGE: 'file_too_large',
+  NOT_FOUND: 'file_not_found',
+} as const;
+
+/** 前端提示用的限制（与后端一致：JPG/PNG/WebP、≤10MB；上游前端提示 5MB） */
+export const FILE_ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export const FILE_MAX_BYTES = 10 * 1024 * 1024;
+export const IMAGE_COMPRESS_MAX_BYTES = 1 * 1024 * 1024;
+export const IMAGE_COMPRESS_MAX_EDGE = 1920;
+
+export interface StoredFileDto {
+  key: string;
+  url: string;
+  size: number;
+  mime: string;
+}
 
 // ---------------------------------------------------------------------------
 // AI（P6-3）：对照上游 lib/ai（gemini / openai / azure 三选一 + 9 个错误码）

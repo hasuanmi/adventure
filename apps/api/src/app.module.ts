@@ -7,6 +7,7 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { AuthModule } from './auth/auth.module';
 import { CompletionModule } from './completion/completion.module';
 import { FamilyModule } from './family/family.module';
+import { FilesModule } from './files/files.module';
 import { GrowthModule } from './growth/growth.module';
 import { HealthModule } from './health/health.module';
 import { KnowledgeTagModule } from './knowledge-tag/knowledge-tag.module';
@@ -42,6 +43,7 @@ import { WrongQuestionModule } from './wrong-question/wrong-question.module';
     WrongQuestionModule,
     KnowledgeTagModule,
     AiModule,
+    FilesModule,
   ],
 })
 export class AppModule {}
