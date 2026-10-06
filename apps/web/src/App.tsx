@@ -10,11 +10,10 @@ import { FamilyPage } from './pages/FamilyPage';
 import { GrowthCardsPage } from './pages/GrowthCardsPage';
 import { GrowthPage } from './pages/GrowthPage';
 import { LearningPage } from './pages/LearningPage';
-import { AiTutorPage } from './pages/AiTutorPage';
+import { AiRecognizePage, WrongQuestionUploadPage } from './pages/WrongQuestionUploadPage';
 import { WrongQuestionDetailPage } from './pages/WrongQuestionDetailPage';
 import { WrongQuestionFormPage } from './pages/WrongQuestionFormPage';
 import { WrongQuestionListPage } from './pages/WrongQuestionListPage';
-import { WrongQuestionUploadPage } from './pages/WrongQuestionUploadPage';
 import { WrongQuestionStatsPage } from './pages/WrongQuestionStatsPage';
 import { KnowledgeTagsPage } from './pages/KnowledgeTagsPage';
 import { LoginPage } from './pages/LoginPage';
@@ -69,7 +68,7 @@ export function App() {
         {/* 学习（P6）：学习中心 → AI 解题 / 错题本（对照上游 wrong-notebook 全部功能逐步落地）
             注意顺序：静态子路由必须在 :id 之前，否则 /new 会被当成 id */}
         <Route path="/learning" element={withLayout(<LearningPage />)} />
-        <Route path="/learning/ai-tutor" element={withLayout(<AiTutorPage />)} />
+        <Route path="/learning/ai-recognize" element={withLayout(<AiRecognizePage />)} />
         <Route path="/learning/wrong-questions" element={withLayout(<WrongQuestionListPage />)} />
         <Route path="/learning/wrong-questions/new" element={withLayout(<WrongQuestionUploadPage />)} />
         <Route path="/learning/wrong-questions/manual" element={withLayout(<WrongQuestionFormPage />)} />

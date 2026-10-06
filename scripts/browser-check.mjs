@@ -1454,12 +1454,30 @@ async function main() {
     await cdp.waitFor('[data-learning-entry="wrong-questions"]');
     const hub = await cdp.evaluate(`(() => ({
       wrongQuestions: Boolean(document.querySelector('[data-learning-entry="wrong-questions"]')),
-      aiTutor: Boolean(document.querySelector('[data-learning-entry="ai-tutor"]')),
+      aiRecognize: Boolean(document.querySelector('[data-learning-entry="ai-recognize"]')),
       text: String(document.body.innerText).replace(/\\n/g, ' | ').slice(0, 120),
     }))()`);
     console.log(`      学习中心：${JSON.stringify(hub)}`);
     check('学习中心含「错题本」入口', hub.wrongQuestions, true);
-    check('学习中心含「AI 解题」入口', hub.aiTutor, true);
+    check('学习中心含「AI 识别」入口（原 AI 解题）', hub.aiRecognize, true);
+    check('学习中心不再出现旧名「AI 解题」', String(hub.text).includes('AI 解题'), false);
+
+    // 「AI 识别」与错题本「上传新题」必须是**同一个功能**：三模式与拖拽区完全一致
+    await cdp.send('Page.navigate', { url: `${BASE}/learning/ai-recognize` });
+    await cdp.waitFor('[data-upload-zone]');
+    const aiCapture = await cdp.evaluate(`(() => ({
+      tabs: [...document.querySelectorAll('[data-upload-tab]')].map((b) => b.textContent.trim()),
+      hasZone: Boolean(document.querySelector('[data-upload-zone]')),
+      hasCapture: Boolean(document.querySelector('[data-screen-capture]')),
+    }))()`);
+    console.log(`      AI 识别页：${JSON.stringify(aiCapture)}`);
+    check(
+      'AI 识别页含三个模式（拍照上传 / AI 识别 / 直接录入）',
+      aiCapture.tabs.join(',') === '拍照上传,AI 识别,直接录入',
+      true,
+    );
+    check('AI 识别页与上传新题共用同一识别流程（拖拽区 + 屏幕截图）', aiCapture.hasZone && aiCapture.hasCapture, true);
+    await cdp.shot('34-ai-recognize');
 
     // 录入一道错题（UI 全流程）→ 直接录入表单（上传页为 /new，手工表单为 /manual）
     await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions/manual` });

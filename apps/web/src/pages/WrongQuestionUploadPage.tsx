@@ -9,20 +9,28 @@ import { compressImage, filesApi } from '../lib/api/files';
 
 type InputMode = 'image' | 'text' | 'direct';
 
+/** 上游三输入模式里的第二个（TextInputZone）；用户要求该项命名为「AI 识别」 */
 const TABS: { key: InputMode; label: string; icon: typeof Upload }[] = [
   { key: 'image', label: '拍照上传', icon: Upload },
-  { key: 'text', label: 'AI 解题', icon: PenLine },
+  { key: 'text', label: 'AI 识别', icon: PenLine },
   { key: 'direct', label: '直接录入', icon: PenLine },
 ];
 
+interface CaptureProps {
+  /** notebook = 错题本「上传新题」；ai = 学习「AI 识别」（**同一个识别流程，两个入口**） */
+  variant?: 'notebook' | 'ai';
+}
+
 /**
- * 上传新题（对照上游首页三个输入模式：UploadZone / TextInputZone / DirectTextEditor）
+ * 上传/识别（**同一个功能**，对照上游首页三个输入模式：UploadZone / TextInputZone / DirectTextEditor）
+ *  · 入口 1：错题本 →「上传新题」（带四入口导航）
+ *  · 入口 2：学习 →「AI 识别」（孩子直接搜题识题，同一套拍照/手输/识别）
  *  · 拍照上传：拖拽或选择图片（JPG/PNG）→ 压缩 → 上传 → AI 识题 → 进确认表单
- *  · AI 解题：直接输入题干文字 → AI 解析 → 进确认表单
+ *  · AI 识别：直接输入题干文字 → AI 解析 → 进确认表单
  *  · 直接录入：不经过 AI，手工填写
  * 另含上游的「屏幕截图」（getDisplayMedia；仅 https/localhost 可用）
  */
-export function WrongQuestionUploadPage() {
+export function WrongQuestionCapture({ variant = 'notebook' }: CaptureProps) {
   const navigate = useNavigate();
   const fileInput = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<InputMode>('image');
@@ -118,7 +126,16 @@ export function WrongQuestionUploadPage() {
 
   return (
     <div className="space-y-3">
-      <WrongQuestionNav />
+      {variant === 'notebook' ? (
+        <WrongQuestionNav />
+      ) : (
+        <div className="flex items-center justify-between">
+          <Link to="/learning" className="text-sm font-bold text-inkSoft hover:text-ink">
+            ← 返回学习
+          </Link>
+          <h1 className="text-base font-extrabold tracking-widest">AI 识别</h1>
+        </div>
+      )}
 
       <Panel>
         {/* 三个输入模式（对照上游 inputMode） */}
@@ -284,8 +301,24 @@ export function WrongQuestionUploadPage() {
       </Panel>
 
       <p className="text-center text-[11px] text-inkSoft">
-        也可以 <Link to="/learning/wrong-questions" className="underline">直接查看错题本</Link>
+        {variant === 'notebook' ? (
+          <>
+            也可以 <Link to="/learning/wrong-questions" className="underline">直接查看错题本</Link>
+          </>
+        ) : (
+          <>识别后可以确认并存入错题本 —— 与「错题本 → 上传新题」是同一个功能</>
+        )}
       </p>
     </div>
   );
+}
+
+/** 错题本入口：上传新题 */
+export function WrongQuestionUploadPage() {
+  return <WrongQuestionCapture variant="notebook" />;
+}
+
+/** 学习入口：AI 识别（孩子直接搜题识题；与上传新题共用同一套识别流程） */
+export function AiRecognizePage() {
+  return <WrongQuestionCapture variant="ai" />;
 }
