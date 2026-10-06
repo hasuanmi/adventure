@@ -7,7 +7,7 @@
 // 用法：node scripts/browser-check.mjs [--base http://localhost:18080] [--out ./ui-shots]
 // 前置：Docker 栈已起（web/nginx + api + postgres），且能连到 postgres（用于清理测试数据）。
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, openSync, closeSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync, openSync, closeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -1720,6 +1720,17 @@ async function main() {
     );
     check('默认不勾内容时打印区不含答案', printUi.bodyHasAnswer, false);
     check('工具条标记为打印时隐藏（data-no-print）', printUi.toolbar, true);
+    // 未勾选任何内容时：打印区给"作答留白"而不是多余提示文案（对照上游 shouldReserveAnswerSpace）
+    const blankState = await cdp.evaluate(`(() => {
+      const text = String(document.querySelector('[data-print-area]')?.innerText || '');
+      return {
+        hasBlank: Boolean(document.querySelector('[data-print-blank]')),
+        noisy: text.includes('未选择任何打印内容'),
+      };
+    })()`);
+    console.log(`      留白检查：${JSON.stringify(blankState)}`);
+    check('没有可显示内容时给作答留白（无多余提示文案）', blankState.hasBlank && blankState.noisy === false, true);
+
     // 勾上「显示答案 + 原题文字」→ 打印区出现答案与题干
     await cdp.clickSelector('[data-print-toggle="answer"]');
     await cdp.clickSelector('[data-print-toggle="questionText"]');
@@ -1749,6 +1760,34 @@ async function main() {
       true,
     );
     await cdp.shot('38-print-preview');
+
+    // ---------- 导出 PDF：真正下载文件（用户反馈"导出失败"→ 不再依赖系统打印对话框） ----------
+    const downloadDir = join(ROOT, 'ui-shots', 'downloads');
+    await cdp
+      .send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloadDir })
+      .catch(() => {});
+    await cdp.clickSelector('[data-export-pdf]');
+    await cdp.waitFor('[data-pdf-result]', 30_000);
+    const pdfNotice = await cdp.evaluate(`document.querySelector('[data-pdf-result]')?.textContent ?? ''`);
+    console.log(`      导出 PDF：${JSON.stringify(pdfNotice)}`);
+    check('点「导出 PDF」给出成功提示', /已导出 PDF（\d+ 页）/.test(pdfNotice), true);
+    // 校验磁盘上的真文件：%PDF 魔数 + 体积
+    await sleep(1500);
+    const pdfFiles = existsSync(downloadDir)
+      ? readdirSync(downloadDir).filter((f) => f.toLowerCase().endsWith('.pdf'))
+      : [];
+    const latest = pdfFiles.sort().at(-1);
+    let pdfOk = false;
+    let pdfSize = 0;
+    let pdfHead = '';
+    if (latest) {
+      const buf = readFileSync(join(downloadDir, latest));
+      pdfSize = buf.length;
+      pdfHead = buf.subarray(0, 4).toString('latin1');
+      pdfOk = pdfHead === '%PDF' && buf.length > 1000;
+    }
+    console.log(`      PDF 文件：${latest ?? '(无)'} size=${pdfSize} head=${pdfHead}`);
+    check('导出的是真实 PDF 文件（%PDF 魔数 + >1KB）', pdfOk, true);
     // 打印媒体下：外壳隐藏、打印区域白底黑字
     await cdp.send('Emulation.setEmulatedMedia', { media: 'print' });
     await sleep(400);

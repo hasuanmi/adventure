@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { MASTERY_LABELS, PRINT_PREVIEW_PAGE_SIZE, WrongQuestionDto } from '@huahua/shared-types';
 import { ArrowLeft } from 'lucide-react';
 import { Skeleton } from '../components/ui/skeleton';
-import { useAuthedImage } from '../hooks/use-authed-image';
+import { useAuthedImages } from '../hooks/use-authed-images';
+import { exportQuestionsToPdf } from '../lib/pdf';
 import { wrongQuestionsApi } from '../lib/api/wrong-questions';
 import { subjectMeta } from '../lib/constants';
 
@@ -12,6 +13,7 @@ import { subjectMeta } from '../lib/constants';
 function PrintItem({
   item,
   index,
+  imageUrl,
   imageScale,
   showQuestionText,
   showAnswers,
@@ -21,6 +23,7 @@ function PrintItem({
 }: {
   item: WrongQuestionDto;
   index: number;
+  imageUrl?: string;
   imageScale: number;
   showQuestionText: boolean;
   showAnswers: boolean;
@@ -28,7 +31,6 @@ function PrintItem({
   showTags: boolean;
   reserveAnswerSpace: boolean;
 }) {
-  const imageUrl = useAuthedImage(item.originalImageKey);
   return (
     <div
       data-print-question={item.id}
@@ -85,8 +87,9 @@ function PrintItem({
           {item.tags.map((t) => t.name).join('、')}
         </p>
       )}
+      {/* 与上游一致：没有可显示内容时**给出作答留白**（不写多余提示文案） */}
       {!showQuestionText && !showAnswers && !showAnalysis && !showTags && !imageUrl && (
-        <p className="text-sm text-inkSoft">（未选择任何打印内容，请在右上勾选）</p>
+        <div className="h-24" data-print-blank />
       )}
     </div>
   );
@@ -114,6 +117,9 @@ export function WrongQuestionPrintPage() {
   const [showTags, setShowTags] = useState(false);
   const [imageScale, setImageScale] = useState(70);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportedPages, setExportedPages] = useState<number | null>(null);
 
   const query = useQuery({
     queryKey: ['wrong-questions-print', { subject, masteryLevel, search }],
@@ -136,6 +142,31 @@ export function WrongQuestionPrintPage() {
   }, [query.isSuccess, query.dataUpdatedAt]);
 
   const selectedItems = useMemo(() => items.filter((i) => selectedIds.has(i.id)), [items, selectedIds]);
+  const imageUrls = useAuthedImages(
+    selectedItems.map((i) => ({ id: i.id, key: i.originalImageKey })),
+  );
+
+  /** 真正的文件导出：自己生成 PDF 下载（不依赖系统打印对话框，WebView 里也能用） */
+  const handleExportPdf = async (): Promise<void> => {
+    if (selectedItems.length === 0) return;
+    setExporting(true);
+    setExportError(null);
+    setExportedPages(null);
+    try {
+      const pages = await exportQuestionsToPdf({
+        items: selectedItems,
+        imageUrls,
+        show: { questionText: showQuestionText, answer: showAnswers, analysis: showAnalysis, tags: showTags },
+        imageScale,
+        fileName: `错题本-${new Date().toISOString().slice(0, 10)}.pdf`,
+      });
+      setExportedPages(pages);
+    } catch (err) {
+      setExportError(err instanceof Error ? `导出失败：${err.message}` : '导出失败');
+    } finally {
+      setExporting(false);
+    }
+  };
   const reserveAnswerSpace = !showAnswers && !showAnalysis;
   const countLabel = selectedItems.length === items.length ? String(items.length) : `${selectedItems.length}/${items.length}`;
   const emptyState = items.length === 0 ? 'noItems' : selectedItems.length === 0 ? 'noSelection' : null;
@@ -163,6 +194,15 @@ export function WrongQuestionPrintPage() {
           </h1>
           <button
             type="button"
+            data-export-pdf
+            disabled={selectedItems.length === 0 || exporting}
+            onClick={() => void handleExportPdf()}
+            className="border-2 border-ink bg-ok px-4 py-2 text-xs font-extrabold text-white shadow-pixel active:translate-y-0.5 disabled:opacity-50"
+          >
+            {exporting ? '导出中…' : '导出 PDF（下载文件）'}
+          </button>
+          <button
+            type="button"
             data-print-now
             disabled={selectedItems.length === 0}
             onClick={() => window.print()}
@@ -171,6 +211,14 @@ export function WrongQuestionPrintPage() {
             打印 / 保存 PDF
           </button>
         </div>
+        {(exportError || exportedPages !== null) && (
+          <p
+            data-pdf-result
+            className={`text-xs font-bold ${exportError ? 'text-danger' : 'text-ok'}`}
+          >
+            {exportError ?? `已导出 PDF（${exportedPages} 页），请查看浏览器下载`}
+          </p>
+        )}
 
         {/* 图片比例 + 内容开关 */}
         <div className="flex flex-wrap items-center justify-center gap-3">
@@ -280,6 +328,7 @@ export function WrongQuestionPrintPage() {
             key={item.id}
             item={item}
             index={index}
+            imageUrl={imageUrls[item.id]}
             imageScale={imageScale}
             showQuestionText={showQuestionText}
             showAnswers={showAnswers}
