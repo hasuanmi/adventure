@@ -880,58 +880,60 @@ async function main() {
     check('经验值文字在条内（cur / need XP）', /^\d+ \/ \d+ XP$/.test(levelUi?.labelText ?? '') && levelUi?.inside === true, true);
     check('经验条为直角像素条（参考图为方角）', Number(levelUi?.radius ?? 0) <= 2, true);
     check('表头头像换成 toon 角色图', String(levelUi?.imgSrc ?? '').includes('avatar-girl-toon'), true);
-    // 顶部信息栏结构（用户订正）：**三个独立组件** —— 头像框 | 等级小方框 | XP 条；
-    // 禁止任何"包住等级+XP 的大外框"（大框套小框），XP 文字不得有自己的底色块
+    // 顶部信息栏结构（用户订正第二版）：**高头像 + 低状态条**
+    //   头像框保持现有尺寸；【等级+XP】整体约一半高度、**底部与头像框底部对齐**（非垂直居中）；
+    //   等级框与 XP 条**直接相连**（无间距）；外面不得有任何大框
     const levelLook = await cdp.evaluate(`(() => {
       const entry = document.querySelector('[data-growth-entry]');
       if (!entry) return null;
       const avatarFrame = entry.querySelector('[data-avatar-frame]');
       const img = entry.querySelector('[data-avatar-img]');
+      const group = entry.querySelector('[data-status-group]');
       const badge = entry.querySelector('[data-level-badge]');
       const bar = entry.querySelector('[data-xp-bar]');
       const fill = entry.querySelector('[data-xp-fill]');
       const label = entry.querySelector('[data-xp-label]');
-      if (!avatarFrame || !img || !badge || !bar || !fill || !label) return null;
+      if (!avatarFrame || !img || !group || !badge || !bar || !fill || !label) return null;
       const r = (el) => el.getBoundingClientRect();
       const cs = (el) => getComputedStyle(el);
       const nums = (s) => (s.match(/\\d+(\\.\\d+)?/g) || []).map(Number);
       const [fr, fg, fb] = nums(cs(fill).backgroundColor);
-      const barR = r(bar);
-      const labelR = r(label);
-      const fillR = r(fill);
+      const af = r(avatarFrame);
+      const gr = r(group);
+      const bd = r(badge);
+      const br = r(bar);
+      const lr = r(label);
       const inner = {
-        top: barR.top + (parseFloat(cs(bar).borderTopWidth) || 0),
-        bottom: barR.bottom - (parseFloat(cs(bar).borderBottomWidth) || 0),
+        top: br.top + (parseFloat(cs(bar).borderTopWidth) || 0),
+        bottom: br.bottom - (parseFloat(cs(bar).borderBottomWidth) || 0),
       };
       return {
-        // 三组件各自边框
         avatarBorder: parseFloat(cs(avatarFrame).borderTopWidth) || 0,
         badgeBorder: parseFloat(cs(badge).borderTopWidth) || 0,
         barBorder: parseFloat(cs(bar).borderTopWidth) || 0,
-        // 共同父元素（徽章与条的直接父）不得有边框/底色
-        parentBorder: parseFloat(cs(badge.parentElement).borderTopWidth) || 0,
-        parentBg: cs(badge.parentElement).backgroundColor,
-        parentIsShared: badge.parentElement === bar.parentElement,
-        // 直接祖父（再上一层）也不得有边框，且不得同时包住头像（避免大外框）
-        grandBorder: parseFloat(cs(badge.parentElement.parentElement).borderTopWidth) || 0,
-        grandContainsAvatar: badge.parentElement.parentElement.contains(avatarFrame),
-        // 等高 + 顶部对齐
-        heights: [Math.round(r(avatarFrame).height), Math.round(r(badge).height), Math.round(r(bar).height)],
-        tops: [Math.round(r(avatarFrame).top), Math.round(r(badge).top), Math.round(r(bar).top)],
-        // 头像框贴身（内边距 ≤ 4px）
-        avatarPad: [
-          Math.round(r(img).left - (r(avatarFrame).left + (parseFloat(cs(avatarFrame).borderLeftWidth) || 0))),
-          Math.round(r(img).top - (r(avatarFrame).top + (parseFloat(cs(avatarFrame).borderTopWidth) || 0))),
-        ],
-        // XP 文字：无底色、绝对定位、水平垂直都居中于整条
+        // 无大外框：group 自身无边框无底色；其父（行容器）也无边框无底色
+        groupBorder: parseFloat(cs(group).borderTopWidth) || 0,
+        groupBg: cs(group).backgroundColor,
+        rowBorder: parseFloat(cs(group.parentElement).borderTopWidth) || 0,
+        rowBg: cs(group.parentElement).backgroundColor,
+        // 尺寸与对齐
+        avatarH: Math.round(af.height),
+        groupH: Math.round(gr.height),
+        ratio: Number((gr.height / af.height).toFixed(2)),
+        bottomDelta: Math.round(af.bottom - gr.bottom),
+        centerDelta: Math.round(Math.abs((af.top + af.bottom) / 2 - (gr.top + gr.bottom) / 2)),
+        avatarImgW: Math.round(r(img).width),
+        // 等级框与 XP 条直接相连（无间距）；紧靠头像
+        seam: Math.round(br.left - bd.right),
+        gapToAvatar: Math.round(gr.left - af.right),
+        // XP 条内部：单平面 + 文字无底色且居中
+        fillCoversInner: Math.abs(r(fill).top - inner.top) <= 1 && Math.abs(r(fill).bottom - inner.bottom) <= 1,
+        barChildren: bar.children.length,
         labelBg: cs(label).backgroundColor,
         labelPos: cs(label).position,
         labelCentered:
-          Math.abs((labelR.left + labelR.right) / 2 - (barR.left + barR.right) / 2) <= 2 &&
-          Math.abs((labelR.top + labelR.bottom) / 2 - (barR.top + barR.bottom) / 2) <= 2,
-        // 单一水平面：填充铺满条的内部高度，条内只有「填充 + 文字」两层
-        fillCoversInner: Math.abs(fillR.top - inner.top) <= 1 && Math.abs(fillR.bottom - inner.bottom) <= 1,
-        barChildren: bar.children.length,
+          Math.abs((lr.left + lr.right) / 2 - (br.left + br.right) / 2) <= 2 &&
+          Math.abs((lr.top + lr.bottom) / 2 - (br.top + br.bottom) / 2) <= 2,
         barBg: cs(bar).backgroundColor,
         fillBg: cs(fill).backgroundColor,
         blueish: fb > fr && fb > fg,
@@ -939,16 +941,18 @@ async function main() {
       };
     })()`);
     console.log(`      顶部信息栏：${JSON.stringify(levelLook)}`);
-    check('三个组件都有各自边框（头像框/等级框/XP 条均 2px）', levelLook?.avatarBorder === 2 && levelLook?.badgeBorder === 2 && levelLook?.barBorder === 2, true);
-    check('等级框与 XP 条是同一父级的兄弟（无大外框）', levelLook?.parentIsShared === true && Number(levelLook?.parentBorder ?? 9) === 0, true);
-    check('父级无底色（不存在包住等级+XP 的大矩形）', levelLook?.parentBg === 'rgba(0, 0, 0, 0)', true);
-    check('更外层无边框且不同时包含头像（不形成大框套小框）', Number(levelLook?.grandBorder ?? 9) === 0 && levelLook?.grandContainsAvatar === true, true);
-    check('三组件等高（|Δ| ≤ 1px）', new Set(levelLook?.heights ?? []).size === 1, true);
-    check('三组件顶部对齐（|Δ| ≤ 1px）', new Set(levelLook?.tops ?? []).size === 1, true);
-    check('头像框贴身（内边距 ≤ 4px）', (levelLook?.avatarPad ?? [9, 9]).every((v) => v <= 4), true);
-    check('XP 文字无独立底色块', levelLook?.labelBg === 'rgba(0, 0, 0, 0)', true);
-    check('XP 文字绝对定位且整条居中', levelLook?.labelPos === 'absolute' && levelLook?.labelCentered === true, true);
-    check('XP 条只有一个水平面（填充铺满内部，无第二层）', levelLook?.fillCoversInner === true && levelLook?.barChildren === 2, true);
+    check('头像框保持现有尺寸（约 36px）', Number(levelLook?.avatarH ?? 0) >= 32, true);
+    check('【等级+XP】整体约为头像高度的一半（0.4–0.7）', Number(levelLook?.ratio ?? 0) >= 0.4 && Number(levelLook?.ratio ?? 9) <= 0.7, true);
+    check('等级+XP 底部与头像框底部对齐（|Δ| ≤ 1px）', Math.abs(Number(levelLook?.bottomDelta ?? 99)) <= 1, true);
+    check('等级+XP 不是与头像垂直居中', Number(levelLook?.centerDelta ?? 0) > 4, true);
+    // seam = 条左 - 等级框右：0 = 紧贴，-2 = 边框重叠一条缝（本设计的"直接相连"）
+    check('等级框与 XP 条直接相连（无缝，边框重叠 ≤2px）', Number(levelLook?.seam ?? 99) >= -2 && Number(levelLook?.seam ?? 99) <= 0, true);
+    check('等级+XP 紧靠头像（间距 ≤ 10px）', Number(levelLook?.gapToAvatar ?? 99) <= 10, true);
+    check('三处边框均为 2px（头像框/等级框/XP 条）', levelLook?.avatarBorder === 2 && levelLook?.badgeBorder === 2 && levelLook?.barBorder === 2, true);
+    check('未给等级+XP 加外框（group 与行容器均无边框）', Number(levelLook?.groupBorder ?? 9) === 0 && Number(levelLook?.rowBorder ?? 9) === 0, true);
+    check('未给等级+XP 加底色（无包住它的大矩形）', levelLook?.groupBg === 'rgba(0, 0, 0, 0)' && levelLook?.rowBg === 'rgba(0, 0, 0, 0)', true);
+    check('XP 文字无独立底色块、绝对定位、整条居中', levelLook?.labelBg === 'rgba(0, 0, 0, 0)' && levelLook?.labelPos === 'absolute' && levelLook?.labelCentered === true, true);
+    check('XP 条只有一个水平面（填充铺满内部、无第二层）', levelLook?.fillCoversInner === true && levelLook?.barChildren === 2, true);
     check('经验条未填充为浅米色', levelLook?.barBg === 'rgb(242, 229, 201)', true);
     check('经验条填充为深藏蓝（参考采样色）', levelLook?.fillBg === 'rgb(68, 78, 105)' && levelLook?.blueish === true, true);
     check('头像图片 object-contain（不裁切）', levelLook?.imgFit === 'contain', true);
@@ -999,7 +1003,7 @@ async function main() {
       const entry = document.querySelector('[data-growth-entry]');
       const avatarFrame = entry.querySelector('[data-avatar-frame]');
       const img = entry.querySelector('[data-avatar-img]');
-      const badge = entry.querySelector('[data-level-badge]');
+      const group = entry.querySelector('[data-status-group]');
       const bar = entry.querySelector('[data-xp-bar]');
       const label = entry.querySelector('[data-xp-label]');
       const r = (el) => el.getBoundingClientRect();
@@ -1010,7 +1014,7 @@ async function main() {
         avatarW: Math.round(r(img).width),
         barW: Math.round(b.width),
         labelFits: l.width <= b.width + 1,
-        equalTops: Math.abs(r(avatarFrame).top - r(badge).top) <= 1 && Math.abs(r(badge).top - b.top) <= 1,
+        bottomAligned: Math.abs(r(avatarFrame).bottom - r(group).bottom) <= 1,
       };
     })()`);
     console.log(`      窄屏 360px：${JSON.stringify(narrow)}`);
@@ -1018,7 +1022,7 @@ async function main() {
     check('窄屏头像未被挤小（≥ 24px）', Number(narrow.avatarW) >= 24, true);
     check('窄屏 XP 条仍有可用宽度（≥ 80px）', Number(narrow.barW) >= 80, true);
     check('窄屏 XP 文字仍在条内', narrow.labelFits === true, true);
-    check('窄屏三组件仍顶部对齐', narrow.equalTops === true, true);
+    check('窄屏仍保持底部对齐', narrow.bottomAligned === true, true);
     await cdp.shot('20-header-narrow-360');
     await cdp.send('Emulation.clearDeviceMetricsOverride');
     await sleep(500);

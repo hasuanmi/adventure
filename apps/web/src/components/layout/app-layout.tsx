@@ -43,10 +43,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* HUD 顶部（docs/ui-reference.md §2） */}
       <header className="shrink-0 border-b-4 border-ink bg-ink text-panelLight">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
-          {/* 左上角顶部信息栏（2026-10-06 按用户订正的结构重做）：
-              **三个互相独立的组件** —— 头像框 | 等级数字小方框 | XP 条 —— 各自有边框；
-              **不在它们外面再套任何大外框**（用户明确禁止"大框套小框"）。
-              三者等高（h-9 → 36px）、顶部对齐、间距统一 gap-2；日期与累计 XP 在整行下方。 */}
+          {/* 左上角顶部信息栏（2026-10-06 按用户订正的第二版结构）：
+              **高头像 + 低状态条** —— 头像保持现有尺寸；【等级+XP】整体缩到约一半高度（h-5 = 20px，
+              头像框 36px ≈ 55%），`items-end` 让**状态条底部与头像框底部对齐**（不是垂直居中）。
+              等级框与 XP 条**直接相连**：无间距 + 边框重叠 2px → 一条缝，视为同一个连续组件；
+              两者各自有边框，**外面不加任何大框**。日期与累计 XP 在整个组件下方。 */}
           <Link
             to="/growth"
             data-growth-entry
@@ -54,8 +55,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             title="我的成长"
             className="flex min-w-0 flex-1 flex-col gap-1 transition active:translate-y-0.5"
           >
-            <span className="flex min-w-0 items-start gap-2">
-              {/* 1) 头像框：独立小框，尺寸贴着头像（内边距仅 2px） */}
+            <span className="flex min-w-0 items-end gap-1.5">
+              {/* 1) 头像框：保持现有尺寸，独立小框（内边距 2px，贴身） */}
               <span
                 data-avatar-frame
                 className="shrink-0 border-2 border-ink bg-panelLight p-0.5"
@@ -69,39 +70,39 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 />
               </span>
 
-              {/* 2) 等级数字：独立小方框，与 XP 条横向排列（不共外套） */}
-              <span
-                data-level-badge
-                className="grid h-9 w-9 shrink-0 place-items-center border-2 border-ink bg-accent text-base font-extrabold text-white"
-                style={{ boxShadow: 'inset 0 -2px 0 rgba(0,0,0,0.2)' }}
-              >
-                {xpProgress ? xpProgress.level : '—'}
-              </span>
-
-              {/* 3) XP 条：边框只包住进度条本体（一个高度、一个水平面）；
-                    蓝色已完成 + 米色未完成同面；文字**绝对定位叠加居中**，没有自己的底色块 */}
-              <span
-                data-xp-bar
-                className="relative h-9 min-w-0 flex-1 overflow-hidden border-2 border-ink bg-panel"
-              >
+              {/* 2)【等级 + XP】连续组件：低矮（约头像一半高），底部与头像平齐 */}
+              <span data-status-group className="flex min-w-0 flex-1 items-stretch">
                 <span
-                  data-xp-fill
-                  aria-hidden
-                  className="absolute inset-y-0 left-0 bg-xp transition-all"
-                  style={{
-                    width: `${Math.round((xpProgress?.ratio ?? 0) * 100)}%`,
-                    boxShadow: 'inset 0 2px 0 var(--xp-light), inset 0 -2px 0 var(--xp-dark)',
-                  }}
-                />
-                <span
-                  data-xp-label
-                  className="pointer-events-none absolute inset-0 grid place-items-center text-[11px] font-extrabold leading-none text-white"
-                  style={{
-                    textShadow:
-                      '1px 1px 0 #1a2438, -1px 1px 0 #1a2438, 1px -1px 0 #1a2438, -1px -1px 0 #1a2438',
-                  }}
+                  data-level-badge
+                  className="grid h-5 w-5 shrink-0 place-items-center border-2 border-ink bg-accent text-[11px] font-extrabold leading-none text-white"
                 >
-                  {xpProgress ? `${xpProgress.current} / ${xpProgress.needed} XP` : '— XP'}
+                  {xpProgress ? xpProgress.level : '—'}
+                </span>
+                {/* -ml-0.5（-2px）：与等级框边框重叠 → 两框直接相连、共享一条 2px 缝 */}
+                <span
+                  data-xp-bar
+                  className="relative -ml-0.5 h-5 min-w-0 flex-1 overflow-hidden border-2 border-ink bg-panel"
+                >
+                  <span
+                    data-xp-fill
+                    aria-hidden
+                    className="absolute inset-y-0 left-0 bg-xp transition-all"
+                    style={{
+                      width: `${Math.round((xpProgress?.ratio ?? 0) * 100)}%`,
+                      boxShadow: 'inset 0 1px 0 var(--xp-light), inset 0 -1px 0 var(--xp-dark)',
+                    }}
+                  />
+                  {/* 文字叠加在**同一个平面**：绝对定位居中，无独立底色块 */}
+                  <span
+                    data-xp-label
+                    className="pointer-events-none absolute inset-0 grid place-items-center text-[10px] font-extrabold leading-none text-white"
+                    style={{
+                      textShadow:
+                        '1px 1px 0 #1a2438, -1px 1px 0 #1a2438, 1px -1px 0 #1a2438, -1px -1px 0 #1a2438',
+                    }}
+                  >
+                    {xpProgress ? `${xpProgress.current} / ${xpProgress.needed} XP` : '— XP'}
+                  </span>
                 </span>
               </span>
             </span>
