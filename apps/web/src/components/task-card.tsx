@@ -105,7 +105,7 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
 
   return (
     <Panel
-      className={cn('relative overflow-hidden bg-panelLight')}
+      className={cn('relative overflow-hidden', expanded && 'bg-panelLight')}
       style={{
         borderWidth: 4,
         borderStyle: 'solid',
@@ -119,11 +119,11 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
         data-task-card-toggle
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-2 px-2 py-1.5 text-left transition hover:bg-panelLight"
+        className="flex w-full items-center gap-1.5 px-[5px] py-[5px] text-left transition hover:bg-panelLight"
       >
         {/* 图标 tile（44px 见方，对齐 Demo 比例；内嵌 32px 原生图标 → 像素不糊）+ 像素角饰 */}
-        <span className="relative grid h-11 w-11 shrink-0 place-items-center border-2 border-ink bg-panelLight shadow-pixel">
-          <img src={taskTileIconUrl(task)} alt="" aria-hidden className="h-8 w-8 [image-rendering:pixelated]" />
+        <span className="relative grid h-10 w-10 shrink-0 place-items-center border-2 border-ink bg-panelLight shadow-pixel">
+          <img src={taskTileIconUrl(task)} alt="" aria-hidden className="h-7 w-7 [image-rendering:pixelated]" />
           <span aria-hidden className="absolute -left-1 -top-1 h-1.5 w-1.5 bg-accent" />
           <span aria-hidden className="absolute -bottom-1 -right-1 h-1.5 w-1.5 bg-accent" />
         </span>
