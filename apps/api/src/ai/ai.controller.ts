@@ -26,4 +26,12 @@ export class AiController {
   ): Promise<{ raw: string; fields: Record<string, string | null> }> {
     return this.ai.reanswer(body);
   }
+
+  /** 相似题生成（对照上游 POST /api/practice/generate） */
+  @Post('similar')
+  async similar(
+    @Body() body: { questionText: string; subject?: string | null; count?: number },
+  ): Promise<{ raw: string; items: { question: string; answer: string | null; hint: string | null }[] }> {
+    return this.ai.similar(body);
+  }
 }

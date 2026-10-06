@@ -134,6 +134,12 @@ export function WrongQuestionDetailPage() {
         </Link>
         <div className="flex gap-2">
           <Link
+            to={`/learning/wrong-questions/practice?id=${q.id}`}
+            className="border-2 border-ink bg-[#7a5c38] px-2 py-1 text-xs font-bold text-white shadow-pixel active:translate-y-0.5"
+          >
+            相似题练习
+          </Link>
+          <Link
             to={`/learning/wrong-questions/${q.id}/edit`}
             className="border-2 border-ink bg-panel px-2 py-1 text-xs font-bold shadow-pixel active:translate-y-0.5"
           >

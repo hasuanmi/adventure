@@ -83,6 +83,55 @@ export function buildReanswerPrompt(params: { questionText: string; wrongAnswerT
     .join('\n');
 }
 
+/** 相似题（对照上游 POST /api/practice/generate：按原题生成同知识点的练习题） */
+export const SIMILAR_ITEM_TAGS = ['question', 'answer', 'hint'] as const;
+
+export function buildSimilarPrompt(params: {
+  questionText: string;
+  subject?: string | null;
+  count: number;
+}): string {
+  return [
+    '你是一位中小学老师。请根据下面这道错题，出几道**同一知识点、同等难度**的巩固练习题。',
+    '',
+    `数量：${params.count} 道。`,
+    '输出格式（只输出这些标签，不要 JSON、不要 Markdown 代码块、不要序号）：',
+    '<items>',
+    '  <item>',
+    '    <question>题干</question>',
+    '    <answer>答案</answer>',
+    '    <hint>一句话提示</hint>',
+    '  </item>',
+    '  …重复 count 次…',
+    '</items>',
+    '',
+    '硬性约束：数字与题干必须与原题不同但同类型；解析语言为简体中文；禁止输出图片链接。',
+    params.subject ? `学科：${params.subject}` : '',
+    '',
+    `原题：\n${params.questionText}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** 解析 <items><item>…</item></items> */
+export function parseSimilarItems(
+  raw: string,
+): { question: string; answer: string | null; hint: string | null }[] {
+  const items: { question: string; answer: string | null; hint: string | null }[] = [];
+  const blocks = raw.match(/<item>[\s\S]*?<\/item>/g) ?? [];
+  for (const block of blocks) {
+    const question = extractTag(block, 'question');
+    if (!question) continue;
+    items.push({
+      question,
+      answer: extractTag(block, 'answer'),
+      hint: extractTag(block, 'hint'),
+    });
+  }
+  return items;
+}
+
 /** 上游 `extractTag()` 的等价实现：按标签名截取第一个开始与最后一个结束之间的内容 */
 export function extractTag(text: string, tag: string): string | null {
   const open = text.indexOf(`<${tag}>`);

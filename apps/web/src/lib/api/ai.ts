@@ -1,4 +1,4 @@
-import { AiStatusDto } from '@huahua/shared-types';
+import { AiStatusDto, SimilarQuestionDto } from '@huahua/shared-types';
 import { request } from './client';
 
 export interface AiAnalyzeResult {
@@ -17,6 +17,13 @@ export const aiApi = {
     }),
   reanswer: (body: { questionText: string; wrongAnswerText?: string | null }) =>
     request<AiAnalyzeResult>('/ai/reanswer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  /** 相似题生成（上游 /api/practice/generate） */
+  similar: (body: { questionText: string; subject?: string | null; count?: number }) =>
+    request<{ raw: string; items: SimilarQuestionDto[] }>('/ai/similar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

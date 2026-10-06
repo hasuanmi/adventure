@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { MASTERY_LABELS, WRONG_QUESTION_SUBJECTS } from '@huahua/shared-types';
@@ -21,6 +21,7 @@ function excerpt(text: string | null, len = 80): string {
 
 /** 错题列表（对照上游错题列表：关键词/学科/掌握度筛选 + 分页；后续批加统计与图片缩略图） */
 export function WrongQuestionListPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const importInput = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
@@ -158,10 +159,27 @@ export function WrongQuestionListPage() {
         <button
           type="button"
           data-export
+          onClick={() => {
+            // 导出 = 先进入打印预览，再在打印对话框里另存为 PDF（用户要求）
+            const qs = new URLSearchParams();
+            if (subject) qs.set('subject', subject);
+            if (masteryLevel !== '') qs.set('masteryLevel', masteryLevel);
+            if (search) qs.set('search', search);
+            if (selected.length) qs.set('ids', selected.join(','));
+            const query = qs.toString();
+            navigate(`/learning/wrong-questions/print${query ? `?${query}` : ''}`);
+          }}
+          className="border-2 border-ink bg-panel px-2 py-1 text-xs font-bold shadow-pixel active:translate-y-0.5"
+        >
+          导出 / 打印
+        </button>
+        <button
+          type="button"
+          data-backup-json
           onClick={() => void onExport()}
           className="border-2 border-ink bg-panel px-2 py-1 text-xs font-bold shadow-pixel active:translate-y-0.5"
         >
-          导出备份
+          备份 JSON
         </button>
         <button
           type="button"

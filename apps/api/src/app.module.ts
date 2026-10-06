@@ -12,6 +12,7 @@ import { GrowthModule } from './growth/growth.module';
 import { HealthModule } from './health/health.module';
 import { KnowledgeTagModule } from './knowledge-tag/knowledge-tag.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { PracticeModule } from './practice/practice.module';
 import { RewardProfileModule } from './reward-profile/reward-profile.module';
 import { TaskModule } from './task/task.module';
 import { WrongQuestionModule } from './wrong-question/wrong-question.module';
@@ -44,6 +45,7 @@ import { WrongQuestionModule } from './wrong-question/wrong-question.module';
     KnowledgeTagModule,
     AiModule,
     FilesModule,
+    PracticeModule,
   ],
 })
 export class AppModule {}

@@ -1,7 +1,7 @@
 import { BadGatewayException, BadRequestException, Injectable } from '@nestjs/common';
 import { AI_STATUS_REASON } from '@huahua/shared-types';
 import { readAiConfig, isAiConfigured } from './ai.config';
-import { ANALYZE_TAGS, REANSWER_TAGS, buildAnalyzePrompt, buildReanswerPrompt, extractTags } from './ai.prompt';
+import { ANALYZE_TAGS, REANSWER_TAGS, buildAnalyzePrompt, buildReanswerPrompt, buildSimilarPrompt, extractTags, parseSimilarItems } from './ai.prompt';
 import { AI_ERROR, AiProviderError, createAiProvider } from './ai.provider';
 
 export interface AiStatusDto {
@@ -74,6 +74,27 @@ export class AiService {
         user: input.questionText,
       });
       return { raw, fields: extractTags(raw, REANSWER_TAGS) };
+    } catch (error) {
+      throw this.toHttp(error);
+    }
+  }
+
+  /** 相似题生成（对照上游 POST /api/practice/generate） */
+  async similar(input: { questionText: string; subject?: string | null; count?: number }): Promise<{
+    raw: string;
+    items: { question: string; answer: string | null; hint: string | null }[];
+  }> {
+    if (!input.questionText?.trim()) {
+      throw new BadRequestException({ error: 'bad_request', reason: 'ai_empty_input' });
+    }
+    const count = Math.min(10, Math.max(1, Number(input.count) || 3));
+    const provider = this.provider();
+    try {
+      const raw = await provider.complete({
+        system: buildSimilarPrompt({ questionText: input.questionText, subject: input.subject, count }),
+        user: input.questionText,
+      });
+      return { raw, items: parseSimilarItems(raw) };
     } catch (error) {
       throw this.toHttp(error);
     }

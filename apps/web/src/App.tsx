@@ -15,6 +15,8 @@ import { WrongQuestionDetailPage } from './pages/WrongQuestionDetailPage';
 import { WrongQuestionFormPage } from './pages/WrongQuestionFormPage';
 import { WrongQuestionListPage } from './pages/WrongQuestionListPage';
 import { WrongQuestionStatsPage } from './pages/WrongQuestionStatsPage';
+import { WrongQuestionPrintPage } from './pages/WrongQuestionPrintPage';
+import { WrongQuestionPracticePage } from './pages/WrongQuestionPracticePage';
 import { KnowledgeTagsPage } from './pages/KnowledgeTagsPage';
 import { LoginPage } from './pages/LoginPage';
 import { SchedulePage } from './pages/SchedulePage';
@@ -74,6 +76,8 @@ export function App() {
         <Route path="/learning/wrong-questions/manual" element={withLayout(<WrongQuestionFormPage />)} />
         <Route path="/learning/wrong-questions/tags" element={withLayout(<KnowledgeTagsPage />)} />
         <Route path="/learning/wrong-questions/stats" element={withLayout(<WrongQuestionStatsPage />)} />
+        <Route path="/learning/wrong-questions/practice" element={withLayout(<WrongQuestionPracticePage />)} />
+        <Route path="/learning/wrong-questions/print" element={withLayout(<WrongQuestionPrintPage />)} />
         <Route path="/learning/wrong-questions/:id" element={withLayout(<WrongQuestionDetailPage />)} />
         <Route path="/learning/wrong-questions/:id/edit" element={withLayout(<WrongQuestionFormPage />)} />
         <Route path="/growth" element={withLayout(<GrowthPage />)} />

@@ -79,6 +79,35 @@ export type PaperLevel = (typeof PAPER_LEVELS)[number];
 export const PRACTICE_DIFFICULTIES = ['easy', 'medium', 'hard', 'harder'] as const;
 export type PracticeDifficulty = (typeof PRACTICE_DIFFICULTIES)[number];
 
+/** 练习难度中文（界面用） */
+export const PRACTICE_DIFFICULTY_LABELS: Record<string, string> = {
+  easy: '基础',
+  medium: '中等',
+  hard: '较难',
+  harder: '挑战',
+};
+
+export const PRACTICE_REASON = {
+  FAMILY_REQUIRED: 'family_required',
+  INVALID_DIFFICULTY: 'invalid_difficulty',
+} as const;
+
+/** 相似题（上游 /api/practice/generate 的返回项） */
+export interface SimilarQuestionDto {
+  question: string;
+  answer: string | null;
+  hint: string | null;
+}
+
+/** 练习统计（上游 /api/stats/practice） */
+export interface PracticeStatsDto {
+  total: number;
+  correct: number;
+  wrong: number;
+  bySubject: { subject: string; total: number; correct: number }[];
+  byDifficulty: { difficulty: string; total: number; correct: number }[];
+}
+
 /** 学段（上游 User.educationStage） */
 export const EDUCATION_STAGES = ['primary', 'junior_high', 'senior_high', 'university'] as const;
 export type EducationStage = (typeof EDUCATION_STAGES)[number];

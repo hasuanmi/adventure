@@ -146,3 +146,31 @@ body {
     animation: none !important;
   }
 }
+
+/* ---------- 打印（导出 PDF 用；对应「导出 -> 打印预览 -> 另存为 PDF」） ---------- */
+@page {
+  margin: 12mm;
+}
+
+@media print {
+  /* 应用外壳（表头/底栏/屏幕上的按钮）不打印 */
+  [data-no-print],
+  header,
+  nav {
+    display: none !important;
+  }
+  /* 打印区域：白底黑字 */
+  [data-print-area] {
+    background: #fff !important;
+    color: #000 !important;
+    padding: 0 !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  /* 每题尽量不跨页断开 */
+  [data-print-question] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

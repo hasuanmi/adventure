@@ -1624,11 +1624,11 @@ async function main() {
 
     // 导出按钮真的下载（CDP 允许下载并读取文件名）
     await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: join(ROOT, 'ui-shots', 'downloads') }).catch(() => {});
-    await cdp.clickSelector('[data-export]');
+    await cdp.clickSelector('[data-backup-json]');
     await sleep(1500);
     const exportNotice = await cdp.evaluate(`document.querySelector('[data-batch-result]')?.textContent ?? ''`);
-    console.log(`      导出：${JSON.stringify(exportNotice)}`);
-    check('导出按钮给出结果提示', String(exportNotice).includes('已导出'), true);
+    console.log(`      备份 JSON：${JSON.stringify(exportNotice)}`);
+    check('「备份 JSON」按钮给出结果提示', String(exportNotice).includes('已导出'), true);
 
     // 清空全部（两步确认）
     await cdp.clickSelector('[data-clear-all]');
@@ -1656,6 +1656,94 @@ async function main() {
       check('AI 重解返回答案/解析', /答案|解析/.test(reText), true);
       await cdp.shot('37-ai-reanswer');
       await api('DELETE', `/wrong-questions/${reId}`, childToken);
+    }
+
+    // ---------- 13k. 导出 = 打印预览（可另存 PDF）+ 相似题练习 ----------
+    // 准备两道题用于打印
+    for (const tag of ['打印A', '打印B']) {
+      await api('POST', '/wrong-questions', childToken, {
+        subject: 'math',
+        questionText: `${tag} ${STAMP}：5+5=?`,
+        answerText: '10',
+        analysis: '五加五等于十。',
+        errorType: '粗心失误',
+      });
+    }
+    await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions` });
+    await cdp.waitFor('[data-wrong-question-card]');
+    await cdp.clickSelector('[data-export]');
+    await sleep(1200);
+    check(
+      '「导出」进入打印预览（而不是直接下载）',
+      String(await cdp.evaluate('location.pathname')).endsWith('/print'),
+      true,
+    );
+    await cdp.waitFor('[data-print-area]');
+    const printUi = await cdp.evaluate(`(() => ({
+      questions: document.querySelectorAll('[data-print-question]').length,
+      hasPrintButton: Boolean(document.querySelector('[data-print-now]')),
+      bodyHasAnswer: String(document.querySelector('[data-print-area]')?.innerText || '').includes('10'),
+      bg: getComputedStyle(document.querySelector('[data-print-area]')).backgroundColor,
+      toolbar: Boolean(document.querySelector('[data-no-print]')),
+    }))()`);
+    console.log(`      打印预览：${JSON.stringify(printUi)}`);
+    check('打印预览列出错题', Number(printUi.questions) >= 2, true);
+    check('打印预览含「打印 / 保存为 PDF」按钮', printUi.hasPrintButton, true);
+    check('打印内容默认含答案', printUi.bodyHasAnswer, true);
+    check('工具条标记为打印时隐藏（data-no-print）', printUi.toolbar, true);
+    // 关掉答案 → 内容里不应再出现答案
+    await cdp.clickSelector('[data-print-toggle="answer"]');
+    await sleep(400);
+    const afterToggle = await cdp.evaluate(
+      `String(document.querySelector('[data-print-area]')?.innerText || '').includes('答案：')`,
+    );
+    check('可关闭答案（当练习卷打印）', afterToggle, false);
+    await cdp.shot('38-print-preview');
+    // 打印媒体下：外壳隐藏、打印区域白底黑字
+    await cdp.send('Emulation.setEmulatedMedia', { media: 'print' });
+    await sleep(400);
+    const printMedia = await cdp.evaluate(`(() => {
+      const shell = document.querySelector('header');
+      const nav = document.querySelector('nav');
+      const area = document.querySelector('[data-print-area]');
+      const toolbar = document.querySelector('[data-no-print]');
+      return {
+        headerHidden: shell ? getComputedStyle(shell).display === 'none' : true,
+        navHidden: nav ? getComputedStyle(nav).display === 'none' : true,
+        toolbarHidden: toolbar ? getComputedStyle(toolbar).display === 'none' : true,
+        areaBg: area ? getComputedStyle(area).backgroundColor : '',
+      };
+    })()`);
+    console.log(`      打印媒体：${JSON.stringify(printMedia)}`);
+    check('打印时隐藏应用外壳（表头/底栏/工具条）', printMedia.headerHidden && printMedia.navHidden && printMedia.toolbarHidden, true);
+    check('打印区域为白底（适合 PDF）', printMedia.areaBg, 'rgb(255, 255, 255)');
+    await cdp.send('Emulation.setEmulatedMedia', { media: '' });
+
+    // 相似题练习（真模型；未配置则跳过）
+    if (aiStatus2.json?.configured) {
+      const srcList = await api('GET', '/wrong-questions?pageSize=1', childToken);
+      const srcId = srcList.json?.items?.[0]?.id;
+      if (srcId) {
+        await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions/practice?id=${srcId}` });
+        await cdp.waitFor('[data-generate-similar]');
+        await cdp.clickSelector('[data-generate-similar]');
+        await cdp.waitFor('[data-similar-list]', 120_000);
+        const generated = await cdp.evaluate(`document.querySelectorAll('[data-similar-item]').length`);
+        console.log(`      生成相似题：${generated} 道`);
+        check('AI 生成相似题', Number(generated) >= 1, true);
+        // 显示答案 + 记一次"会了"
+        await cdp.clickSelector('[data-reveal-answer="0"]');
+        await sleep(300);
+        await cdp.clickSelector('[data-practice-correct="0"]');
+        await sleep(1200);
+        const practiceTotal = await cdp.evaluate(
+          `document.querySelector('[data-practice-total]')?.textContent ?? '0'`,
+        );
+        check('练习记录已写入统计', Number(practiceTotal) >= 1, true);
+        const statsApi = await api('GET', '/practice/stats', childToken);
+        check('练习统计接口口径正确', Number(statsApi.json?.total) >= 1 && Number(statsApi.json?.correct) >= 1, true);
+        await cdp.shot('39-practice');
+      }
     }
 
     // ---------- 13h. AI 适配层（P6-3 骨架）：未配置时明确报错，且密钥绝不下发 ----------
