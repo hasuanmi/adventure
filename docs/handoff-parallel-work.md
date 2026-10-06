@@ -8,9 +8,10 @@
 |---|---|
 | 运行方式 | Docker 三容器：`huahua-postgres`(5432) / `huahua-api`(:3000) / `huahua-web`(nginx **:18080**) |
 | 打开地址 | **http://localhost:18080**（用 `localhost`，不要用 `127.0.0.1`，CORS 只放行配置里列出的 Origin） |
-| 仓库 | `github.com/hasuanmi/adventure`（`origin main`），**CI 全绿**：typecheck+build / API 冒烟 42 条 / 真实浏览器 UI 检查 14 条 |
-| 已完成 | P0 脚手架·认证·Docker、P1 后端、P2 Web 收口（家庭、审批、日程、任务闭环） |
-| 未开始 | P3 移动端、P4 打卡、P5 Event+日历、P6 错题本 |
+| 仓库 | `github.com/hasuanmi/adventure`（`origin main`），**CI 全绿**：typecheck+build / API 冒烟 42 条 / 真实浏览器 UI 检查 151 条 |
+| 已完成 | P0 脚手架·认证·Docker、P1 后端、P2 Web 收口（家庭、审批、日程、任务闭环）、**P4 打卡**（2026-10-06，见 `p2-closure-record.md §23`） |
+| 未开始 | P3 移动端（用户已暂停）、P5 Event+日历、P6 错题本（**设计已调研，见下**） |
+| P6 调研结论 | `docs/wrong-notebook-feature-inventory.md`（上游项目全功能盘点）。**三个阻塞项**：① 上游无 LICENSE 文件（README 仅一行 "MIT License"）② 其图片是 base64 直存 DB（必须重做）③ 间隔复习是死代码（零调用点）。另有 7 处认证/越权缺口**不得继承** |
 | 关键文档 | `docs/p2-closure-record.md`（当前进度与教训）、`docs/deployment.md`、`docs/P1-人工验收指南.md`、`docs/opensource-mapping.md`（开源复用登记，**新增复用必须登记**） |
 
 ## 2. 分工（按文件范围隔离，别抢同一文件）
