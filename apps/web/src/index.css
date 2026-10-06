@@ -36,6 +36,9 @@
   --xp-dark: #2e3957;
   --xp-dark-rgb: 46 57 87;
   --gold: #d8a32b;
+  --gold-dark: #8a6a1f;
+  --gold-deep: #a9761a;
+  --gold-light: #f0d79a;
 }
 
 body {
@@ -239,13 +242,13 @@ body {
    外层深棕细线 + 内层浅色细线 + 金色填充 + **无硬阴影**（扁平、贴近参考图） */
 .pixel-frame-flat {
   position: relative;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--gold-dark);
   background: var(--gold);
 }
 .pixel-frame-flat::after {
   content: '';
   position: absolute;
   inset: 3px;
-  border: 2px solid rgb(255 255 255 / 0.55);
+  border: 2px solid var(--gold-light);
   pointer-events: none;
 }

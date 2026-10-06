@@ -156,7 +156,7 @@ export function AppLayout({
                 className={({ isActive }) =>
                   cn(
                     'flex flex-col items-center gap-0.5 py-1.5 text-xs',
-                    isActive ? 'bg-ink text-panelLight' : 'text-ink/75 hover:bg-white/25',
+                    isActive ? 'bg-[var(--gold-deep)] text-white' : 'text-[var(--gold-dark)] hover:bg-white/25',
                   )
                 }
               >
