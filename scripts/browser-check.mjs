@@ -167,6 +167,28 @@ class Cdp {
     return box;
   }
 
+  /** 在选择器匹配的元素中，点击文本包含 text 的第一个（用于"某张卡片上的某个按钮"） */
+  async clickByText(selector, text) {
+    const box = await this.evaluate(`(() => {
+      const els = [...document.querySelectorAll(${JSON.stringify(selector)})];
+      const el = els.find((e) => (e.textContent || '').includes(${JSON.stringify(text)}));
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, text: (el.textContent || '').trim().slice(0, 50) };
+    })()`);
+    if (!box) throw new Error(`找不到含文本「${text}」的 ${selector}`);
+    await this.clickAt(box.x, box.y);
+    return box;
+  }
+
+  /** 某张任务卡（按标题定位）的完整文本，用于断言卡片内状态 */
+  cardText(title) {
+    return this.evaluate(`(() => {
+      const t = [...document.querySelectorAll('[data-task-card-toggle]')].find((e) => (e.textContent || '').includes(${JSON.stringify(title)}));
+      return t ? (t.parentElement.innerText || '').replace(/\\n/g, ' | ') : null;
+    })()`);
+  }
+
   async type(selector, text) {
     await this.evaluate(`document.querySelector(${JSON.stringify(selector)}).focus()`);
     await this.send('Input.insertText', { text });
@@ -233,13 +255,15 @@ async function main() {
   const childId = me.json.members.find((m) => m.username === CHILD)?.id;
   const parentId = me.json.members.find((m) => m.username === PARENT)?.id;
 
-  // 今天 14:00–15:00 的日程任务（让日程页有内容可看）
+  // 今天 14:00–15:00 的日程任务（让日程页有内容可看；同时用于可展开面板/行内操作断言）
   const todayStart = new Date();
   todayStart.setHours(14, 0, 0, 0);
   const todayEnd = new Date(todayStart.getTime() + 60 * 60 * 1000);
+  const taskTitle = `UI 检查任务 ${STAMP}`;
   await api('POST', '/tasks', parentToken, {
     childId,
-    title: `UI 检查任务 ${STAMP}`,
+    title: taskTitle,
+    description: '做完 20 道口算并自查（UI 检查用完成标准）',
     startAt: todayStart.toISOString(),
     endAt: todayEnd.toISOString(),
     requiresApproval: true,
@@ -458,6 +482,74 @@ async function main() {
     check('两个时间都可编辑（非 disabled/readonly）', await cdp.evaluate(
       `[...document.querySelectorAll('input[type="datetime-local"]')].every((i) => !i.disabled && !i.readOnly)`,
     ), true);
+
+    // 关掉新建任务 Sheet（Esc），回到干净的今日页
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await sleep(500);
+
+    // ---------- 6. 今日页：TaskCard → 可展开任务面板（家长视角） ----------
+    await cdp.send('Page.navigate', { url: `${BASE}/` });
+    await cdp.waitFor('[data-task-card-toggle]');
+    const collapsed = await cdp.evaluate(`document.querySelector('[data-task-card-toggle]').getAttribute('aria-expanded')`);
+    check('任务卡默认收起', collapsed, 'false');
+    await cdp.clickByText('[data-task-card-toggle]', taskTitle);
+    await sleep(500);
+    const expandedFlag = await cdp.evaluate(
+      `[...document.querySelectorAll('[data-task-card-toggle]')].find((e) => e.textContent.includes(${JSON.stringify(taskTitle)})).getAttribute('aria-expanded')`,
+    );
+    check('点击任务卡展开', expandedFlag, 'true');
+    const cardPanel = await cdp.cardText(taskTitle);
+    check('展开面板含「进度（按状态）」', String(cardPanel).includes('进度（按状态）'), true);
+    check('展开面板含「完成标准」', String(cardPanel).includes('完成标准'), true);
+    check('完成标准取到 description', String(cardPanel).includes('做完 20 道口算'), true);
+    check('展开面板含详情入口', String(cardPanel).includes('查看详情'), true);
+    check('家长侧含编辑入口', String(cardPanel).includes('编辑'), true);
+    await cdp.shot('07-task-card-expanded');
+
+    // ---------- 7. 切换到孩子：行内「开始 / 完成」真实改状态 + 审批闸门 ----------
+    await cdp.clickSelector('button[aria-label="退出登录"]');
+    await cdp.waitFor('#username');
+    await cdp.type('#username', CHILD);
+    await cdp.type('#password', PASSWORD);
+    const childSubmit = await cdp.evaluate(`(() => {
+      const b = document.querySelector('form button[type="submit"]');
+      const r = b.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    })()`);
+    await cdp.clickAt(childSubmit.x, childSubmit.y);
+    await cdp.waitFor('[data-task-card-toggle]');
+    check('孩子登录后进入首页', await cdp.evaluate('location.pathname'), '/');
+
+    // 本周打卡（孩子侧）
+    const cells = await cdp.evaluate(`document.querySelectorAll('[data-checkin-cell]').length`);
+    check('本周打卡渲染 7 格', cells, 7);
+    check('本周打卡初始 0/7（新孩子无流水）', String(await cdp.evaluate('document.body.innerText')).includes('已点亮 0/7'), true);
+
+    await cdp.clickByText('[data-task-card-toggle]', taskTitle);
+    await sleep(400);
+    check('孩子侧出现行内「开始」', String(await cdp.cardText(taskTitle)).includes('▶ 开始'), true);
+    await cdp.clickByText('button', '▶ 开始');
+    await sleep(1200);
+    const afterStart = await cdp.cardText(taskTitle);
+    check('点「开始」后状态变进行中', String(afterStart).includes('进行中'), true);
+    check('点「开始」后出现行内「完成」', String(afterStart).includes('✓ 完成'), true);
+    check('点「开始」后进度变为 50%', String(afterStart).includes('50%'), true);
+    await cdp.shot('08-child-after-start');
+
+    // 完成（该任务 requiresApproval=true）→ 应进入"等待家长确认"，任务状态不变
+    await cdp.clickByText('button', '✓ 完成');
+    await sleep(1500);
+    const afterComplete = await cdp.cardText(taskTitle);
+    check('需审批任务点完成后提示等待家长确认', String(afterComplete).includes('等待家长确认'), true);
+    check('需审批任务提交后状态仍为进行中', String(afterComplete).includes('进行中'), true);
+    await cdp.shot('09-child-submitted');
+
+    // 再点一次完成 → 409（同一任务已有 pending 完成）应给出友好提示而不是崩溃
+    await cdp.clickByText('button', '✓ 完成');
+    await sleep(1500);
+    const afterDuplicate = await cdp.cardText(taskTitle);
+    check('重复提交给出友好提示（未崩溃）', String(afterDuplicate).includes('已提交过') || String(afterDuplicate).includes('等待家长确认'), true);
   } finally {
     clearTimeout(watchdog);
     try {

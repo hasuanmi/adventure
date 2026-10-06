@@ -8,6 +8,7 @@ import { Panel, PanelHeader } from '../components/ui/card';
 import { PixelBar } from '../components/ui/pixel-bar';
 import { Skeleton } from '../components/ui/skeleton';
 import { TaskCard } from '../components/task-card';
+import { WeekCheckin } from '../components/week-checkin';
 import { TaskCreateSheet } from '../components/task-create/task-create-sheet';
 import { QuickAddRow } from '../components/task-create/quick-add-row';
 import { useUser } from '../hooks/use-user';
@@ -181,6 +182,9 @@ export function TodayPage() {
           <QuickAddRow onClick={() => setCreateOpen(true)} />
         </div>
       </section>
+
+      {/* 本周打卡（像素格）：孩子的"我"视角才有意义（数据是本人流水） */}
+      {user?.role === 'child' && <WeekCheckin />}
 
       {/* 统一 TaskCreateSheet */}
       <TaskCreateSheet open={createOpen} task={null} onClose={() => setCreateOpen(false)} />

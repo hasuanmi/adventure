@@ -228,8 +228,12 @@ function TaskCreateSheetForm({
               {form.formState.errors.title && <p className="mt-1 text-xs text-danger">{form.formState.errors.title.message}</p>}
             </div>
             <div>
-              <Label>描述</Label>
-              <Textarea rows={3} placeholder="任务描述" {...form.register('description')} />
+              <Label>完成标准 / 说明</Label>
+              <Textarea
+                rows={3}
+                placeholder="例：做完 20 道口算并自查；或写下要求与提示"
+                {...form.register('description')}
+              />
             </div>
             <div>
               <Label>学科</Label>

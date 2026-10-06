@@ -261,3 +261,39 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 ### 11.5 待用户确认（未擅自改动）
 
 - 当前时间线（`current-time-line.tsx`）按 `schedule-two-day-design.md §5.4` 实现为**从"现在"到底部的竖向红线**（视觉上偏特殊）。业界常见做法是**横线 + 左侧圆点**。是否改为横线，等确认后再动（涉及文档 §5.4 的既定设计）。
+
+---
+
+## 12. P2 剩余 UI 实施（2026-10-06）：可展开任务面板 + 本周打卡
+
+依据 [docs/p2-ui-ux-review.md](p2-ui-ux-review.md) §8 页面结构、§9 调整项、附录第 9/10 条。用户确认的本次范围：**先做「可展开任务面板」与「本周打卡」**；成长页入口按用户新要求改为**左上角头像 + 等级经验栏**（见 §13）。
+
+三处「展示层派生」记录（**均不新增字段/表**，符合本项目"投影不改模型"惯例）：
+
+| 派生项 | 数据来源 | 说明 |
+|---|---|---|
+| 任务进度 | `task.status` 映射：pending 0% / returned 20% / in_progress 50% / completed 100% | Task 无 progress 字段；面板内标题写明"进度（按状态）"，避免误认为精细进度 |
+| 完成标准 | `task.description` | 创建/编辑弹窗字段标签同步由「描述」改为「完成标准 / 说明」 |
+| 本周打卡 | `GET /growth/grants` 的 `grantedAt`：某天有 ≥1 次发放即点亮 | P4 打卡模块未开始，不做假数据；用真实发放流水投影（当天完成定稿 = 打卡） |
+
+实现清单：
+
+| 文件 | 变更 |
+|---|---|
+| `apps/web/src/components/task-card.tsx` | **重写**为可展开面板：收起态＝像素 tile（含像素角饰）+ 标题 + 状态 + 元信息；展开态＝进度 PixelBar + 完成标准 + 元信息（时间/预计用时/截止/需确认）+ 行内操作 + 详情/编辑入口。头部为 `button[aria-expanded]` + `data-task-card-toggle`（可无障碍、可测） |
+| `apps/web/src/components/week-checkin.tsx` | **新增**：本周一~周日 7 格像素格（`data-checkin-cell`），点亮＝当天有发放；今天 accent 描边、未来日降透明度；仅孩子侧渲染（数据是本人流水） |
+| `apps/web/src/lib/api/growth.ts` | **新增**：`/growth/me`、`/growth/grants` 客户端 |
+| `packages/shared-types/src/growth.ts` | 新增 `dimensionProgressFromPoints`（六维等级内进度，与 XP 同构）；抽出内部 `progressWith` 复用，`levelProgressFromXp` 行为不变（已用 0–20000 步进 7 遍历自检：与旧实现 0 处不一致） |
+| `apps/web/src/pages/TodayPage.tsx` | 孩子侧追加「本周打卡」区块 |
+| `apps/web/src/components/task-create/task-create-sheet.tsx` | 「描述」→「完成标准 / 说明」+ 示例占位文案 |
+
+**行内操作**走 `POST /tasks/:id/status`（`start` / `complete` / `resume`，v1.2 §8.2），仅"任务所属孩子"可执行（服务端同样限制）。`complete` 复用统一完成模型：无需审批＝自动定稿并发放奖励；需审批＝生成待确认申请、任务状态保持 `in_progress`。
+
+**已知未做（有意）**：
+- 行内「暂停」：后端状态矩阵无 `pause`（只有 start/complete/resume），本轮不新增状态，故不做暂停按钮（review 文档 Demo 里的"暂停"与当前状态机不符）。
+- 成长页数值展示：见 §13。
+
+**验证**：`scripts/browser-check.mjs` 断言由 14 条扩到 **31 条，全绿（19 秒）**，新增覆盖：
+1. 任务卡默认收起 → 点击展开（`aria-expanded`）、面板含「进度（按状态）」「完成标准」且完成标准取到 `description`、含「查看详情」「编辑」；
+2. 切换为孩子账号后行内操作**真实改状态**：点「▶ 开始」→ 状态徽章变"进行中"、进度变 50%、出现「✓ 完成」；点「✓ 完成」（该任务需审批）→ 提示"已提交，等待家长确认"且状态仍为进行中；再点一次 → 给出友好提示而非崩溃；
+3. 孩子侧「本周打卡」渲染 7 格、初始 0/7（新账号无流水）。

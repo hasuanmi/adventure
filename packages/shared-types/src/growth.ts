@@ -67,12 +67,28 @@ export interface LevelProgress {
   ratio: number;
 }
 
-export function levelProgressFromXp(xp: number): LevelProgress {
-  const level = levelFromXp(xp);
-  const floor = xpTotalToReach(level);
-  const needed = xpNeedForLevel(level);
-  const current = xp - floor;
+/** 通用：按 (基数, 步进) 规则求等级内进度 */
+function progressWith(points: number, base: number, step: number): LevelProgress {
+  let level = 1;
+  let floor = 0;
+  while (level < GROWTH_MAX_LEVEL) {
+    const need = base + step * (level - 1);
+    if (points < floor + need) break;
+    floor += need;
+    level++;
+  }
+  const needed = base + step * (level - 1);
+  const current = points - floor;
   return { level, current, needed, ratio: needed > 0 ? Math.min(1, current / needed) : 1 };
+}
+
+export function levelProgressFromXp(xp: number): LevelProgress {
+  return progressWith(xp, XP_LEVEL_BASE, XP_LEVEL_STEP);
+}
+
+/** 六维点数 → 等级内进度（与 XP 同构；成长页每维 PixelBar 用） */
+export function dimensionProgressFromPoints(points: number): LevelProgress {
+  return progressWith(points, DIM_LEVEL_BASE, DIM_LEVEL_STEP);
 }
 
 export interface UserGrowthDto {
