@@ -90,7 +90,7 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
           <div className="relative border-2 border-ink bg-panelLight p-[3px]">
             <img
               data-growth-card-image
-              src={`/cards/card-0${card.imageNo}.png`}
+              src="/ui/growth-card-face.jpg"
               alt=""
               className={`block w-full [image-rendering:pixelated] ${
                 collecting ? 'pixel-card-pop' : ''

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { attendanceApi } from '../lib/api/attendance';
 import { GrowthCardModal } from './growth-card-modal';
@@ -77,16 +76,7 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
             )}
           </span>
           <span className="mt-1.5 text-sm font-extrabold text-ink">每日成长卡</span>
-          <span className="text-[11px] text-inkSoft">
-            {claimed ? '✓ 今日已领取' : '完成今日冒险后领取'}
-          </span>
         </button>
-
-        {claimed && (
-          <Link to="/growth-cards" className="mt-0.5 text-[11px] font-bold text-inkSoft underline">
-            查看今日成长记录 →
-          </Link>
-        )}
       </div>
 
       <GrowthCardModal
