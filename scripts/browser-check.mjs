@@ -1406,7 +1406,7 @@ async function main() {
       `(document.querySelector('[data-growth-card-entry]')?.innerText ?? '').replace(/\\n/g, ' ')`,
     );
     console.log(`      成长卡入口：${entryText}`);
-    check('入口文案为「每日打卡 / 完成今日冒险，领取今日成长卡」', /每日打卡/.test(entryText) && /领取今日成长卡/.test(entryText), true);
+    check('入口文案为「每日成长卡 / 完成今日冒险后领取」', /每日成长卡/.test(entryText) && /(完成今日冒险后领取|今日已领取)/.test(entryText), true);
     await cdp.shot('24-growth-card-entry');
 
     // 点击入口 → Pixel RPG 卡片弹窗（结构固定：图 → 标题带 → 一句话 → 领取条）
@@ -1457,7 +1457,7 @@ async function main() {
     console.log(`      领取后：${JSON.stringify(afterClaim)}`);
     check('领取后弹窗自动关闭', afterClaim.modalOpen, false);
     check('入口变为已领取状态', afterClaim.claimed, 'true');
-    check('已领取文案不含打卡时刻', /今日成长卡已领取/.test(afterClaim.entryText) && !/\\d{2}:\\d{2}/.test(afterClaim.entryText), true);
+    check('已领取文案为「今日已领取」且不含打卡时刻', /今日已领取/.test(afterClaim.entryText) && !/\\d{2}:\\d{2}/.test(afterClaim.entryText), true);
     await cdp.shot('26-growth-card-claimed');
     // 业务规则未变：每天最多一张
     const dupClaim = await api('POST', '/attendance/check-in', childToken, {});
