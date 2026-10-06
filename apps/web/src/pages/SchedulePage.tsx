@@ -100,8 +100,7 @@ export function SchedulePage() {
       <button
         type="button"
         onClick={() => openCreate()}
-        className="pixel-frame-flat relative flex w-full items-center justify-center gap-2 px-3 py-2 text-sm font-extrabold tracking-wider text-white transition active:translate-y-0.5"
-        style={{ textShadow: '1px 1px 0 rgba(90,60,20,0.45)' }}
+        className="mt-2 inline-block border-2 border-ink bg-accent px-3 py-1.5 text-sm font-bold text-white shadow-pixel"
       >
         ＋ 新建任务
       </button>
