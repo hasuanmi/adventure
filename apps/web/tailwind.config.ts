@@ -17,6 +17,7 @@ export default {
         brandBg: 'rgb(var(--brand-bg-rgb) / <alpha-value>)',
         warning: 'rgb(var(--warning-rgb) / <alpha-value>)',
         danger: 'rgb(var(--danger-rgb) / <alpha-value>)',
+        xp: 'rgb(var(--xp-rgb) / <alpha-value>)',
       },
       boxShadow: {
         pixel: 'var(--shadow)',

@@ -43,39 +43,48 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* HUD 顶部（docs/ui-reference.md §2） */}
       <header className="shrink-0 border-b-4 border-ink bg-ink text-panelLight">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
-          {/* 左上角：小女孩头像 + 等级经验栏 → 点击进成长页（用户要求：不用底部导航放成长） */}
+          {/* 左上角：头像 + 等级徽章 + 经验条（参考旧项目等级 UI：徽章 + 条内文字"25 / 30 XP"）
+              → 点击进成长页（用户决策：成长不占底部导航） */}
           <Link
             to="/growth"
             data-growth-entry
             aria-label="我的成长"
             title="我的成长"
-            className="flex min-w-0 items-center gap-2 transition active:translate-y-0.5"
+            className="flex min-w-0 flex-1 items-center gap-2 transition active:translate-y-0.5"
           >
             <img
-              src="/avatar-girl.png"
+              src="/avatar-girl-toon.png"
               alt=""
               aria-hidden
-              className="h-11 w-11 shrink-0 border-2 border-panel/60 bg-panelLight [image-rendering:pixelated]"
+              className="h-10 w-10 shrink-0 rounded-md border-2 border-ink/60 bg-panelLight object-cover"
             />
-            <span className="min-w-0">
+            <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1.5">
-                <span className="border-2 border-panel/40 bg-panel/10 px-1.5 py-0.5 text-[11px] font-extrabold">
-                  {xpProgress ? `Lv.${xpProgress.level}` : 'Lv.—'}
-                </span>
-                <span className="text-[11px] text-panelLight/85">
-                  {xpProgress ? `${xpProgress.current}/${xpProgress.needed} XP` : '—'}
-                </span>
-              </span>
-              <span className="mt-1 block h-2 w-28 border border-panel/50 bg-panel/20">
                 <span
-                  className="block h-full transition-all"
-                  style={{
-                    width: `${Math.round((xpProgress?.ratio ?? 0) * 100)}%`,
-                    background: 'var(--ok)',
-                  }}
-                />
+                  data-level-badge
+                  className="grid h-5 min-w-5 shrink-0 place-items-center border-2 border-ink bg-accent px-1 text-[11px] font-extrabold text-white"
+                >
+                  {xpProgress ? xpProgress.level : '—'}
+                </span>
+                <span
+                  data-xp-bar
+                  className="relative h-5 min-w-0 flex-1 overflow-hidden rounded-md border-2 border-ink bg-panelLight"
+                >
+                  <span
+                    aria-hidden
+                    className="absolute inset-y-0 left-0 bg-xp transition-all"
+                    style={{ width: `${Math.round((xpProgress?.ratio ?? 0) * 100)}%` }}
+                  />
+                  <span
+                    data-xp-label
+                    className="absolute inset-0 grid place-items-center text-[10px] font-extrabold text-white"
+                    style={{ textShadow: '1px 1px 0 rgba(0,0,0,0.45)' }}
+                  >
+                    {xpProgress ? `${xpProgress.current} / ${xpProgress.needed} XP` : '— XP'}
+                  </span>
+                </span>
               </span>
-              <span className="mt-0.5 block text-[10px] text-panelLight/70">
+              <span className="mt-0.5 block truncate text-[10px] text-panelLight/70">
                 {dateLabel} · 累计 {xp} XP
               </span>
             </span>

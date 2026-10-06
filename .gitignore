@@ -58,3 +58,5 @@ visualasset/_*.png
 visualasset/icon-library.json
 # Kenney Tiny Factory 由同目录 zip 解压得到（zip 已入库），解压副本不重复提交
 visualasset/kenney_tiny-factory/
+# 同理：Kenney Toon Characters（zip 已入库）
+visualasset/kenney_toon-characters/

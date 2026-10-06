@@ -50,27 +50,48 @@ export function GrowthPage() {
 
   return (
     <div className="space-y-4">
-      {/* 等级卡 */}
+      {/* 等级卡（与表头同一套等级 UI：徽章 + 条内文字 "cur / need XP"） */}
       <Panel className="border-2 border-ink bg-ink text-panelLight">
         <div className="flex items-center gap-3">
           <img
-            src="/avatar-girl.png"
+            src="/avatar-girl-toon.png"
             alt="我的头像"
-            className="h-16 w-16 shrink-0 border-2 border-panel/60 bg-panelLight [image-rendering:pixelated]"
+            className="h-16 w-16 shrink-0 rounded-md border-2 border-ink/60 bg-panelLight object-cover"
           />
           <div className="min-w-0 flex-1">
             <p className="text-lg font-extrabold tracking-widest">
-              Lv.{xpProgress.level}
+              我的等级
               <span className="ml-2 text-xs font-bold text-panelLight/80">
-                {xpProgress.current}/{xpProgress.needed} XP 到下一级
+                累计 {me.xp} XP
               </span>
             </p>
-            <div className="mt-1">
-              <PixelBar barColor="var(--ok)" percent={Math.round(xpProgress.ratio * 100)} />
+            <div className="mt-1.5 flex items-center gap-2">
+              <span
+                data-level-badge
+                className="grid h-7 min-w-7 shrink-0 place-items-center border-2 border-ink bg-accent px-1.5 text-sm font-extrabold text-white"
+              >
+                {xpProgress.level}
+              </span>
+              <span
+                data-xp-bar
+                className="relative h-7 min-w-0 flex-1 overflow-hidden rounded-md border-2 border-ink bg-panelLight"
+              >
+                <span
+                  aria-hidden
+                  className="absolute inset-y-0 left-0 bg-xp transition-all"
+                  style={{ width: `${Math.round(xpProgress.ratio * 100)}%` }}
+                />
+                <span
+                  data-xp-label
+                  className="absolute inset-0 grid place-items-center text-xs font-extrabold text-white"
+                  style={{ textShadow: '1px 1px 0 rgba(0,0,0,0.45)' }}
+                >
+                  {xpProgress.current} / {xpProgress.needed} XP
+                </span>
+              </span>
             </div>
-            <p className="mt-1 text-xs text-panelLight/80">累计 {me.xp} XP</p>
           </div>
-          <div className="shrink-0 border-2 border-panel/40 bg-panel/10 px-2 py-1.5 text-center">
+          <div className="shrink-0 border-2 border-ink/60 bg-panel/10 px-2 py-1.5 text-center">
             <p className="text-[10px] text-panelLight/75">金币</p>
             <p className="text-base font-extrabold">{me.coins}</p>
           </div>

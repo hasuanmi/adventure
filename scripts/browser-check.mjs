@@ -298,16 +298,20 @@ async function main() {
   check('prepare: 两个任务已创建', Boolean(taskId && task2Id), true);
 
   // 两个**完全同时间段**的任务（15:00–16:00）→ 验证"冲突显示 + 并排展示"
+  // 各带一个颜色 → 同时验证"日程任务块用所选颜色做实色底"
   const clashStart = new Date();
   clashStart.setHours(15, 0, 0, 0);
   const clashEnd = new Date(clashStart.getTime() + 60 * 60 * 1000);
-  for (const title of [`冲突A ${STAMP}`, `冲突B ${STAMP}`]) {
+  const clashColors = ['#3b82f6', '#4a9e6b'];
+  const clashTitles = [`冲突A ${STAMP}`, `冲突B ${STAMP}`];
+  for (let i = 0; i < clashTitles.length; i += 1) {
     await api('POST', '/tasks', parentToken, {
       childId,
-      title,
+      title: clashTitles[i],
       startAt: clashStart.toISOString(),
       endAt: clashEnd.toISOString(),
       requiresApproval: false,
+      color: clashColors[i],
     });
   }
 
@@ -710,6 +714,26 @@ async function main() {
     check('两个重叠任务分属不同车道', new Set(clash.blocks.map((b) => b.lane)).size, 2);
     check('重叠任务并排等宽（各约半列）', Math.abs(clash.blocks[0].width - clash.blocks[1].width) <= 2, true);
     check('重叠任务被标记冲突', clash.marked >= 2, true);
+    // 任务块用所选颜色做实色底（用户反馈"选颜色效果不对"）：实色 + 圆角 + 白字
+    const chipStyle = await cdp.evaluate(`(() => {
+      const chips = [...document.querySelectorAll('[data-schedule-chip][data-variant="task"]')]
+        .filter((c) => (c.textContent || '').includes('冲突'));
+      return chips.map((c) => {
+        const s = getComputedStyle(c);
+        return {
+          title: (c.textContent || '').trim().slice(0, 12),
+          bg: s.backgroundColor,
+          color: s.color,
+          radius: parseFloat(s.borderTopLeftRadius) || 0,
+          borderStyle: s.borderTopStyle,
+        };
+      });
+    })()`);
+    console.log(`      任务块样式：${JSON.stringify(chipStyle)}`);
+    check('任务块背景 = 所选颜色（实色底）', chipStyle.some((c) => c.bg === 'rgb(59, 130, 246)'), true);
+    check('任务块文字为白色（对比明显）', chipStyle.every((c) => c.color === 'rgb(255, 255, 255)'), true);
+    check('任务块有圆角', chipStyle.every((c) => c.radius >= 4), true);
+    check('任务块不再是虚线边框', chipStyle.every((c) => c.borderStyle !== 'dashed'), true);
     await cdp.shot('17-schedule-conflict');
 
     // ---------- 5. 新建任务：开始/结束时间默认今天 ----------
@@ -825,8 +849,30 @@ async function main() {
     const headerText = await cdp.evaluate(
       `document.querySelector('[data-growth-entry]').innerText.replace(/\\n/g, ' ')`,
     );
-    check('表头含等级徽章', /Lv\.\d+/.test(String(headerText)), true);
+    check('表头含等级数字徽章', /^\d+/.test(String(headerText).trim()), true);
     check('表头含 XP 进度', String(headerText).includes('XP'), true);
+    // 等级 UI 形态（参考旧项目）：徽章 + **条内文字** cur / need XP + 圆角
+    const levelUi = await cdp.evaluate(`(() => {
+      const badge = document.querySelector('[data-growth-entry] [data-level-badge]');
+      const bar = document.querySelector('[data-growth-entry] [data-xp-bar]');
+      const label = document.querySelector('[data-growth-entry] [data-xp-label]');
+      if (!badge || !bar || !label) return null;
+      const b = bar.getBoundingClientRect();
+      const l = label.getBoundingClientRect();
+      const s = getComputedStyle(bar);
+      return {
+        badgeText: (badge.textContent || '').trim(),
+        labelText: (label.textContent || '').trim(),
+        inside: l.left >= b.left - 1 && l.right <= b.right + 1 && l.top >= b.top - 1 && l.bottom <= b.bottom + 1,
+        radius: parseFloat(s.borderTopLeftRadius) || 0,
+        imgSrc: (document.querySelector('[data-growth-entry] img') || {}).getAttribute?.('src') ?? null,
+      };
+    })()`);
+    console.log(`      等级 UI：${JSON.stringify(levelUi)}`);
+    check('等级徽章显示数字', /^\d+$/.test(levelUi?.badgeText ?? ''), true);
+    check('经验值文字在条内（cur / need XP）', /^\d+ \/ \d+ XP$/.test(levelUi?.labelText ?? '') && levelUi?.inside === true, true);
+    check('经验条为圆角', Number(levelUi?.radius ?? 0) >= 4, true);
+    check('表头头像换成 toon 角色图', String(levelUi?.imgSrc ?? '').includes('avatar-girl-toon'), true);
     const avatarWidth = await cdp.evaluate(
       `(() => { const i = document.querySelector('[data-growth-entry] img'); return i ? i.naturalWidth : 0; })()`,
     );
@@ -846,6 +892,14 @@ async function main() {
     check('成长页含金币', growthText.includes('金币'), true);
     check('成长页含奖励记录区', growthText.includes('奖励记录'), true);
     check('成长页含本周打卡', growthText.includes('本周打卡'), true);
+    check(
+      '成长页等级 UI 同样含条内经验文字',
+      await cdp.evaluate(`(() => {
+        const l = document.querySelector('[data-xp-label]');
+        return Boolean(l && /^\\d+ \\/ \\d+ XP$/.test((l.textContent || '').trim()));
+      })()`),
+      true,
+    );
     await cdp.shot('11-growth-page');
 
     // ---------- 9. 任务类型图标（quest_icons 接入：卡片 tile + HUD「冒险」） ----------

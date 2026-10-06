@@ -28,6 +28,11 @@ export function ScheduleChip({
   className,
 }: ScheduleChipProps) {
   const isTask = variant === 'task';
+  // Task 有两种形态（2026-10-06 用户要求）：
+  //  · **选了颜色** → 实色底（就是所选颜色）+ 圆角 + 白字，一眼能在日程上认出
+  //    （此前只把颜色画成一个小方块/虚线边框，用户反馈"选颜色效果不对"）
+  //  · 未选颜色 → 保留虚线中性样式（与 Event 实色仍可区分）
+  const colored = isTask && Boolean(color);
   return (
     <button
       type="button"
@@ -37,26 +42,19 @@ export function ScheduleChip({
       data-conflict={conflicting ? 'true' : undefined}
       className={cn(
         'flex w-full items-center gap-1 overflow-hidden px-1.5 py-0.5 text-left text-[11px] font-bold transition active:translate-y-0.5',
-        isTask
-          ? 'border-2 border-dashed border-inkSoft bg-panel text-ink'
-          : 'border-2 border-transparent text-white shadow-pixel',
-        // 冲突：红色实线描边压过虚线，一眼看出"这两件撞了"
-        isTask && conflicting && 'border-solid border-danger bg-danger/10',
+        isTask && !colored && 'border-2 border-dashed border-inkSoft bg-panel text-ink',
+        colored && 'rounded-md border-2 border-transparent text-white',
+        !isTask && 'rounded-md border-2 border-transparent text-white shadow-pixel',
+        // 冲突：红描边 + ⚠（实色块用 ring 更醒目）
+        isTask && conflicting && (colored ? 'ring-2 ring-danger' : 'border-solid border-danger bg-danger/10'),
         completed && 'opacity-50',
         className,
       )}
-      style={isTask ? undefined : { backgroundColor: color ?? 'var(--accent)' }}
+      style={!isTask || colored ? { backgroundColor: color ?? 'var(--accent)' } : undefined}
     >
-      {isTask && color && (
-        <span
-          aria-hidden
-          className="h-2 w-2 shrink-0 border border-ink/50"
-          style={{ backgroundColor: color }}
-        />
-      )}
       {conflicting && <span className="shrink-0 text-[9px] text-danger">⚠</span>}
       {timeLabel && (
-        <span className={cn('shrink-0 text-[9px]', isTask ? 'text-inkSoft' : 'text-white/80')}>
+        <span className={cn('shrink-0 text-[9px]', isTask && !colored ? 'text-inkSoft' : 'text-white/85')}>
           {timeLabel}
         </span>
       )}

@@ -28,6 +28,9 @@
   --warning-rgb: 245 158 11;
   --danger: #dc2626;
   --danger-rgb: 220 38 38;
+  /* 经验条（参考旧项目等级 UI 的蓝色填充） */
+  --xp: #3f6bab;
+  --xp-rgb: 63 107 171;
 }
 
 body {
