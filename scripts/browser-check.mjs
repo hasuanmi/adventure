@@ -946,7 +946,11 @@ async function main() {
     // 默认时长 = 60 分钟；但 defaultTaskSlot() 在深夜会主动压缩到当天 23:59（不跨天，by design），
     // 所以这里按"≤60 且 ≥55 分钟"断言，避免断言变成"几点跑才通过"的时间依赖。
     const defaultMin = Math.round((endMs - startMs) / 60000);
-    check('默认时长为 60 分钟（深夜自动压缩到 23:59，允许 55–60）', defaultMin <= 60 && defaultMin >= 55, true);
+    const startHour = new Date(startMs).getHours();
+    // 23 点前必须正好 60 分钟；23 点后 defaultTaskSlot() 会把结束压到当天 23:59（不跨天，属设计），
+    // 因此 23:55 起只剩几分钟是正常行为——按时段判定，避免时间依赖的断言。
+    const slotOk = startHour < 23 ? defaultMin === 60 : defaultMin >= 1 && defaultMin <= 60;
+    check('默认时长为 60 分钟（>=23 点自动压缩到当天 23:59）', slotOk, true);
     check('两个时间都可编辑（非 disabled/readonly）', await cdp.evaluate(
       `[...document.querySelectorAll('input[type="datetime-local"]')].every((i) => !i.disabled && !i.readOnly)`,
     ), true);
