@@ -13,6 +13,7 @@ import { Label } from '../components/ui/label';
 import { Skeleton } from '../components/ui/skeleton';
 import { TaskStatusBadge } from '../components/ui/status-badge';
 import { tasksApi } from '../lib/api/tasks';
+import { questIconForRewardProfile } from '../lib/quest-icons';
 
 // Submit Complete（无旧项目参考——自研；表单模式参考 §二点七）
 const submitSchema = z.object({
@@ -81,12 +82,29 @@ export function SubmitCompletePage() {
       <Panel>
         <PanelHeader>提交完成</PanelHeader>
         <div className="mb-3 flex items-center gap-2">
+          <img
+            src={questIconForRewardProfile(task.rewardProfile)}
+            alt=""
+            aria-hidden
+            className="h-6 w-6 shrink-0 [image-rendering:pixelated]"
+          />
           <span className="truncate font-bold">{task.title}</span>
           <TaskStatusBadge status={task.status} />
         </div>
 
+        {/* 完成标准（与任务卡/详情页一致，孩子提交前能看到要求） */}
+        <div className="mb-3 border-2 border-dashed border-ink/30 bg-panelLight px-2 py-1.5">
+          <p className="text-xs font-bold text-inkSoft">完成标准</p>
+          <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">
+            {task.description?.trim() || <span className="text-inkSoft">（未填写完成标准）</span>}
+          </p>
+        </div>
+
         {task.status === 'completed' ? (
           <p className="text-sm font-bold text-ok">该任务已完成，无需重复提交。</p>
+        ) : result ? (
+          // 已提交成功 → 不再渲染表单，避免"重复提交"（原来表单仍在，会拿到 409）
+          <p className="text-sm font-bold text-ink">本次提交已记录，结果见下方。</p>
         ) : (
           <>
             {task.requiresApproval && (
@@ -125,7 +143,12 @@ export function SubmitCompletePage() {
           )}
           <div className="mt-3 flex gap-2">
             <Link to={`/tasks/${id}`} className="border-2 border-ink bg-accent px-3 py-1.5 text-sm font-bold text-white shadow-pixel">返回任务</Link>
-            <button onClick={() => navigate('/tasks')} className="border-2 border-ink bg-panel px-3 py-1.5 text-sm font-bold text-ink">任务列表</button>
+            <button
+              onClick={() => navigate('/')}
+              className="border-2 border-ink bg-panel px-3 py-1.5 text-sm font-bold text-ink"
+            >
+              返回今日
+            </button>
           </div>
         </Panel>
       )}

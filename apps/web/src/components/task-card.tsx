@@ -8,6 +8,8 @@ import { Badge } from './ui/badge';
 import { TaskStatusBadge } from './ui/status-badge';
 import { PixelBar } from './ui/pixel-bar';
 import { subjectMeta } from '../lib/constants';
+import { questIconForRewardProfile } from '../lib/quest-icons';
+import { taskProgress, taskProgressColor } from '../lib/task-progress';
 import { ApiError } from '../lib/api/client';
 import { tasksApi } from '../lib/api/tasks';
 import { formatHM, parseIso } from '../lib/schedule';
@@ -18,31 +20,17 @@ import { cn } from '../lib/utils';
 // 展开内容：进度 PixelBar + 完成标准 + 行内操作（开始/完成/继续）+ 详情/编辑入口 + 像素角饰。
 //
 // 两个"展示层派生"的说明（不改模型）：
-//  1) **进度**：Task 无 progress 字段，这里按状态映射（pending 0 / returned 20 / in_progress 50 / completed 100），
-//     标题明确标注"按状态"，不让用户误以为是精细进度。
+//  1) **进度**：见 lib/task-progress.ts（按状态映射），标题明确标注"按状态"，不让用户误以为是精细进度。
 //  2) **完成标准**：复用 task.description（创建页字段标签同步改为「完成标准 / 说明」）。
 //
 // 行内操作调 POST /tasks/:id/status（start/complete/resume，v1.2 §8.2）：
 //  - 仅"任务所属孩子"可执行（服务端同样限制）；complete 走统一完成模型：
 //    无需审批 = 自动定稿并发奖；需审批 = 生成待确认申请，任务状态保持进行中。
-const PROGRESS_BY_STATUS: Record<string, number> = {
-  pending: 0,
-  returned: 20,
-  in_progress: 50,
-  completed: 100,
-};
-
 const INLINE_ACTION: Partial<Record<string, { action: TaskStatusAction; label: string }>> = {
   pending: { action: 'start', label: '▶ 开始' },
   in_progress: { action: 'complete', label: '✓ 完成' },
   returned: { action: 'resume', label: '↻ 继续' },
 };
-
-function progressColor(task: TaskDto): string {
-  if (task.status === 'completed') return 'var(--ok)';
-  if (task.status === 'returned') return 'var(--danger)';
-  return task.color ?? 'var(--accent)';
-}
 
 export function TaskCard({ task }: { task: TaskDto }) {
   const user = useUser();
@@ -50,7 +38,7 @@ export function TaskCard({ task }: { task: TaskDto }) {
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const subj = subjectMeta(task.subject);
-  const progress = PROGRESS_BY_STATUS[task.status] ?? 0;
+  const progress = taskProgress(task.status);
   const action = INLINE_ACTION[task.status];
   const isOwnChild = user?.role === 'child' && task.childId === user.userId;
 
@@ -94,8 +82,14 @@ export function TaskCard({ task }: { task: TaskDto }) {
         aria-expanded={expanded}
         className="flex w-full items-center gap-3 p-3 text-left transition hover:bg-panelLight"
       >
-        <span className="relative grid h-10 w-10 shrink-0 place-items-center border-2 border-ink bg-panelLight text-xl">
-          {subj.emoji}
+        <span className="relative grid h-10 w-10 shrink-0 place-items-center border-2 border-ink bg-panelLight">
+          {/* 任务类型图标（奖励档分类派生：日常/世界/风物/悬赏），32px 原生像素图 */}
+          <img
+            src={questIconForRewardProfile(task.rewardProfile)}
+            alt=""
+            aria-hidden
+            className="h-8 w-8 [image-rendering:pixelated]"
+          />
           {/* 像素角饰（Demo 风格） */}
           <span aria-hidden className="absolute -left-1 -top-1 h-1.5 w-1.5 bg-accent" />
           <span aria-hidden className="absolute -bottom-1 -right-1 h-1.5 w-1.5 bg-accent" />
@@ -110,7 +104,9 @@ export function TaskCard({ task }: { task: TaskDto }) {
             {task.color && (
               <span aria-hidden className="h-2 w-2 border border-ink/50" style={{ backgroundColor: task.color }} />
             )}
-            <span>{subj.label}</span>
+            <span>
+              {subj.emoji} {subj.label}
+            </span>
             {task.requiresApproval && <Badge variant="soft">需确认</Badge>}
             {task.startAt && (
               <span>
@@ -135,7 +131,7 @@ export function TaskCard({ task }: { task: TaskDto }) {
             <span>进度（按状态）</span>
             <span>{progress}%</span>
           </div>
-          <PixelBar barColor={progressColor(task)} percent={progress} className="mt-1" />
+          <PixelBar barColor={taskProgressColor(task)} percent={progress} className="mt-1" />
 
           {/* 完成标准 */}
           <p className="mt-3 text-xs font-bold text-inkSoft">完成标准</p>

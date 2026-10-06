@@ -259,7 +259,7 @@ model Task {
 |---|---|---|---|---|
 | 像素头像（小女孩，16×16 → 128px） | `apps/web/public/avatar-girl.png`、`avatar-girl-16.png` | **本项目自研**（脚本生成，无第三方素材） | ✅ 已用（表头 + 成长页） | 生成脚本 `visualasset/build_avatar.py`（与 `build_icons.py` 同一套路，可复现/改色）。**背景**：先查 `visualasset/` 现成素材——Kenney Tiny Farm 内无女孩角色；内部生图模型返回 `402 insufficient balance`，故改为脚本化绘制 |
 | Kenney Tiny Farm（像素农场 tile 集） | `visualasset/kenney_tiny-farm/` | **CC0 1.0**（包内 `License.txt`；预览图标注 CC0，无需署名、可商用） | ⬜ **暂未使用** | 用户加入的素材；本轮逐格切片核对：角色仅 r9c0 男孩 / r9c1 农夫。后续若要用于任务卡角饰/空态插画，需在本表补登具体用途 |
-| 任务类型图标 ×5（日常/冒险/世界/自然/悬赏） | `visualasset/quest_icons/` | **本项目自研**（`build_icons.py` 生成，含 light/dark 预览与 32px 原生尺寸） | ⬜ **暂未使用** | 可作 P4/P5 任务类型或成就图标；接入时在本表补登 |
+| 任务类型图标 ×5（日常/冒险/世界/自然/悬赏） | `apps/web/public/quest/`（源：`visualasset/quest_icons/native32/`） | **本项目自研**（`build_icons.py` 生成，含 light/dark 预览与 32px 原生尺寸） | ✅ **已用**（2026-10-06） | 映射：`daily`→01_daily、`world`→03_world、`scenery`→04_nature、`custom`→05_bounty、`adventure`→「今日冒险」HUD；落点与理由见 `p2-closure-record.md` §14.1，映射常量在 `apps/web/src/lib/quest-icons.ts` |
 
 > 纪律：**未使用的素材也登记**（来源、许可、是否已落地），避免日后出现"仓库里有一堆来源不明的图"。
 

@@ -15,6 +15,7 @@ import { useUser } from '../hooks/use-user';
 import { approvalsApi } from '../lib/api/approvals';
 import { familyApi } from '../lib/api/family';
 import { tasksApi } from '../lib/api/tasks';
+import { QUEST_ICON_ADVENTURE } from '../lib/quest-icons';
 import { TODAY_TABS, TodayTabKey, todayTasks } from '../lib/today';
 
 // Today（docs/ui-reference.md §4 + docs/p2-ui-ux-review.md §8：
@@ -102,7 +103,15 @@ export function TodayPage() {
     <div className="space-y-4">
       {/* 今日冒险（PixelBar 进度） */}
       <Panel className="border-2 border-ink bg-ink text-panelLight">
-        <PanelHeader className="text-panelLight">⚔️ 今日冒险</PanelHeader>
+        <PanelHeader className="flex items-center gap-2 !text-panelLight">
+          <img
+            src={QUEST_ICON_ADVENTURE}
+            alt=""
+            aria-hidden
+            className="h-6 w-6 [image-rendering:pixelated]"
+          />
+          今日冒险
+        </PanelHeader>
         <p className="mb-2 text-sm">
           已完成 {completedCount}/{scoped.length} 个任务 · 进度 {percent}%
         </p>

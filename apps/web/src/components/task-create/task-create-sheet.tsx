@@ -10,6 +10,8 @@ import { tasksApi } from '../../lib/api/tasks';
 import { rewardProfilesApi } from '../../lib/api/reward-profiles';
 import { taskFormSchema, type TaskFormValues } from '../../lib/task-form-schema';
 import { toDateInputValue, toLocalInputValue, defaultTaskSlot, endAtFromStart } from '../../lib/schedule';
+import { QUEST_ICON_BY_CATEGORY, questIconForRewardProfile } from '../../lib/quest-icons';
+import type { RewardProfileCategory } from '@huahua/shared-types';
 import { useUser } from '../../hooks/use-user';
 import { COLOR_PRESETS, PRIORITY_OPTIONS, SUBJECT_OPTIONS, WEEKDAY_REPEAT_OPTIONS } from '../../lib/constants';
 import { cn } from '../../lib/utils';
@@ -307,12 +309,32 @@ function TaskCreateSheetForm({
             <div>
               <Label>奖励档位</Label>
               <Select value={form.watch('rewardProfile')} onValueChange={(v) => form.setValue('rewardProfile', v)}>
-                <SelectTrigger><SelectValue placeholder="默认（自定义任务）" /></SelectTrigger>
+                <SelectTrigger>
+                  <span className="flex items-center gap-2">
+                    <img
+                      src={questIconForRewardProfile(form.watch('rewardProfile'))}
+                      alt=""
+                      aria-hidden
+                      className="h-5 w-5 [image-rendering:pixelated]"
+                    />
+                    <SelectValue placeholder="默认（自定义任务）" />
+                  </span>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">默认（自定义任务）</SelectItem>
                   {profileGroups.map((g) => (
                     <SelectGroup key={g.category}>
-                      <SelectLabel>{g.label}</SelectLabel>
+                      <SelectLabel>
+                        <span className="flex items-center gap-1.5">
+                          <img
+                            src={QUEST_ICON_BY_CATEGORY[g.category as RewardProfileCategory]}
+                            alt=""
+                            aria-hidden
+                            className="h-4 w-4 [image-rendering:pixelated]"
+                          />
+                          {g.label}
+                        </span>
+                      </SelectLabel>
                       {profiles.filter((p) => p.category === g.category).map((p) => (
                         <SelectItem key={p.code} value={p.code}>{p.label}</SelectItem>
                       ))}
@@ -320,7 +342,9 @@ function TaskCreateSheetForm({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="mt-1 text-xs text-inkSoft">来自系统配置，只显示名称。</p>
+              <p className="mt-1 text-xs text-inkSoft">
+                来自系统配置，只显示名称；左侧图标 = 任务类型（日常/世界/风物/悬赏）。
+              </p>
             </div>
           </div>
 

@@ -5,6 +5,7 @@ import { ArrowLeft, Pencil, Play, RotateCcw, Send } from 'lucide-react';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Panel } from '../components/ui/card';
+import { PixelBar } from '../components/ui/pixel-bar';
 import { Textarea } from '../components/ui/input';
 import { Skeleton } from '../components/ui/skeleton';
 import { TaskStatusBadge } from '../components/ui/status-badge';
@@ -15,6 +16,8 @@ import { familyApi } from '../lib/api/family';
 import { tasksApi } from '../lib/api/tasks';
 import { rewardProfilesApi } from '../lib/api/reward-profiles';
 import { subjectMeta } from '../lib/constants';
+import { questIconForRewardProfile } from '../lib/quest-icons';
+import { formatDateTime, taskProgress, taskProgressColor } from '../lib/task-progress';
 
 const WEEK_CN = ['一', '二', '三', '四', '五', '六', '日'];
 
@@ -104,10 +107,20 @@ export function TaskDetailPage() {
 
   async function changeStatus(action: 'start' | 'resume') {
     try {
+      setActionError(null);
       await tasksApi.changeStatus(current.id, { action });
       await taskQuery.refetch();
     } catch (e) {
-      alert(e instanceof Error ? e.message : '操作失败');
+      // 原来是 alert()（不可断言、打断操作）→ 改为页面内提示
+      setActionError(
+        e instanceof ApiError
+          ? e.status === 403
+            ? '只有任务所属的孩子可以操作'
+            : e.status === 409
+              ? '当前状态不允许这个操作'
+              : `${e.reason ?? '错误'}：${e.message}`
+          : '操作失败，请稍后再试',
+      );
     }
   }
 
@@ -135,12 +148,23 @@ export function TaskDetailPage() {
 
       <Panel>
         <div className="flex items-center gap-3">
-          <span className="grid h-12 w-12 place-items-center border-2 border-ink bg-panelLight text-2xl">{subj.emoji}</span>
+          <span className="relative grid h-12 w-12 place-items-center border-2 border-ink bg-panelLight">
+            <img
+              src={questIconForRewardProfile(task.rewardProfile)}
+              alt=""
+              aria-hidden
+              className="h-9 w-9 [image-rendering:pixelated]"
+            />
+            <span aria-hidden className="absolute -left-1 -top-1 h-1.5 w-1.5 bg-accent" />
+            <span aria-hidden className="absolute -bottom-1 -right-1 h-1.5 w-1.5 bg-accent" />
+          </span>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-xl font-extrabold">{task.title}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <TaskStatusBadge status={task.status} />
-              <Badge variant="soft">{subj.label}</Badge>
+              <Badge variant="soft">
+                {subj.emoji} {subj.label}
+              </Badge>
               {task.color && (
                 <span
                   aria-label="任务颜色"
@@ -153,7 +177,18 @@ export function TaskDetailPage() {
           </div>
         </div>
 
-        {task.description && <p className="mt-3 whitespace-pre-wrap text-sm text-inkSoft">{task.description}</p>}
+        {/* 进度（按状态派生；与任务卡同一映射） */}
+        <div className="mt-3 flex items-center justify-between text-xs font-bold text-inkSoft">
+          <span>进度（按状态）</span>
+          <span>{taskProgress(task.status)}%</span>
+        </div>
+        <PixelBar barColor={taskProgressColor(task)} percent={taskProgress(task.status)} className="mt-1" />
+
+        {/* 完成标准（= task.description；与创建页字段、任务卡标签一致） */}
+        <p className="mt-3 text-xs font-bold text-inkSoft">完成标准</p>
+        <p className="mt-1 whitespace-pre-wrap text-sm text-ink">
+          {task.description?.trim() || <span className="text-inkSoft">（未填写完成标准）</span>}
+        </p>
 
         <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
           <div>
@@ -166,11 +201,11 @@ export function TaskDetailPage() {
           </div>
           <div>
             <dt className="text-xs font-bold text-inkSoft">开始时间</dt>
-            <dd className="text-ink">{task.startAt ? new Date(task.startAt).toLocaleString('zh-CN') : '—'}</dd>
+            <dd className="text-ink">{formatDateTime(task.startAt)}</dd>
           </div>
           <div>
             <dt className="text-xs font-bold text-inkSoft">结束时间</dt>
-            <dd className="text-ink">{task.endAt ? new Date(task.endAt).toLocaleString('zh-CN') : '—'}</dd>
+            <dd className="text-ink">{formatDateTime(task.endAt)}</dd>
           </div>
           <div>
             <dt className="text-xs font-bold text-inkSoft">截止日期</dt>
@@ -300,6 +335,11 @@ export function TaskDetailPage() {
             {latestCompletion?.status === 'pending' && <p className="text-sm font-bold text-warning">等待确认中…</p>}
             {task.status === 'completed' && <p className="text-sm font-bold text-ok">✅ 已完成</p>}
           </div>
+          {actionError && (
+            <p className="mt-2 border-2 border-danger bg-panelLight px-2 py-1 text-sm font-bold text-danger">
+              {actionError}
+            </p>
+          )}
         </Panel>
       )}
     </div>

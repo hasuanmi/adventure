@@ -260,7 +260,7 @@ async function main() {
   todayStart.setHours(14, 0, 0, 0);
   const todayEnd = new Date(todayStart.getTime() + 60 * 60 * 1000);
   const taskTitle = `UI 检查任务 ${STAMP}`;
-  await api('POST', '/tasks', parentToken, {
+  const createdTask = await api('POST', '/tasks', parentToken, {
     childId,
     title: taskTitle,
     description: '做完 20 道口算并自查（UI 检查用完成标准）',
@@ -269,6 +269,18 @@ async function main() {
     requiresApproval: true,
     reviewerId: parentId,
   });
+  const taskId = createdTask.json?.id;
+
+  // 第二个任务：**无需审批** → 用于验证"提交页提交后自动定稿发奖 + 表单隐藏 + 打卡点亮"
+  const task2Title = `UI 提交页任务 ${STAMP}`;
+  const createdTask2 = await api('POST', '/tasks', parentToken, {
+    childId,
+    title: task2Title,
+    description: '读完一章并写三句话总结（提交页用完成标准）',
+    requiresApproval: false,
+  });
+  const task2Id = createdTask2.json?.id;
+  check('prepare: 两个任务已创建', Boolean(taskId && task2Id), true);
 
   // ---------- 1. 启动无头浏览器 ----------
   const exe = EDGE_CANDIDATES.find((p) => existsSync(p));
@@ -579,6 +591,55 @@ async function main() {
     check('成长页含奖励记录区', growthText.includes('奖励记录'), true);
     check('成长页含本周打卡', growthText.includes('本周打卡'), true);
     await cdp.shot('11-growth-page');
+
+    // ---------- 9. 任务类型图标（quest_icons 接入：卡片 tile + HUD「冒险」） ----------
+    await cdp.send('Page.navigate', { url: `${BASE}/` });
+    await cdp.waitFor('[data-task-card-toggle]');
+    const questImgs = await cdp.evaluate(`(() => {
+      const imgs = [...document.querySelectorAll('img[src^="/quest/"]')];
+      return { count: imgs.length, loaded: imgs.filter((i) => i.naturalWidth > 0).length };
+    })()`);
+    check('今日页使用任务类型图标（HUD + 任务卡 tile，≥2 处）', questImgs.count >= 2, true);
+    check('任务类型图标全部加载成功（public/quest 资源可用）', questImgs.loaded, questImgs.count);
+
+    // ---------- 10. 任务详情页微调（类型图标/进度/完成标准） ----------
+    await cdp.send('Page.navigate', { url: `${BASE}/tasks/${taskId}` });
+    await cdp.waitFor('dl');
+    const detailText = String(await cdp.evaluate('document.body.innerText'));
+    check('详情页含「完成标准」标题', detailText.includes('完成标准'), true);
+    check('详情页完成标准取到 description', detailText.includes('做完 20 道口算'), true);
+    check('详情页含「进度（按状态）」', detailText.includes('进度（按状态）'), true);
+    const detailIcon = await cdp.evaluate(
+      `(() => { const i = document.querySelector('img[src^="/quest/"]'); return i ? i.naturalWidth : 0; })()`,
+    );
+    check('详情页类型图标已加载', Number(detailIcon) > 0, true);
+    await cdp.shot('12-task-detail');
+
+    // ---------- 11. 提交页：提交后自动定稿发奖 + 表单隐藏（防重复提交） ----------
+    await cdp.send('Page.navigate', { url: `${BASE}/tasks/${task2Id}/submit` });
+    await cdp.waitFor('textarea');
+    const submitText = String(await cdp.evaluate('document.body.innerText'));
+    check('提交页显示完成标准', submitText.includes('读完一章'), true);
+    await cdp.type('textarea', '读完了，写好了三句话总结');
+    await cdp.clickByText('button', '提交完成');
+    await sleep(2000);
+    const afterSubmit = String(await cdp.evaluate('document.body.innerText'));
+    check('无需审批任务提交后提示奖励已发放', afterSubmit.includes('成长奖励已发放'), true);
+    const textareaGone = await cdp.evaluate(`document.querySelectorAll('textarea').length`);
+    check('提交成功后表单已隐藏（避免重复提交）', textareaGone, 0);
+    await cdp.shot('13-submit-result');
+
+    // ---------- 12. 奖励闭环：打卡点亮 + 成长页累计 XP ----------
+    await cdp.send('Page.navigate', { url: `${BASE}/` });
+    await cdp.waitFor('[data-checkin-cell]');
+    const checkinText = String(await cdp.evaluate('document.body.innerText'));
+    check('完成任务后本周打卡点亮 1/7', checkinText.includes('已点亮 1/7'), true);
+    await cdp.clickSelector('[data-growth-entry]');
+    await sleep(1200);
+    const growthAfter = String(await cdp.evaluate('document.body.innerText'));
+    check('成长页累计 XP 已增加', /累计 [1-9]\d* XP/.test(growthAfter), true);
+    check('成长页奖励记录非空', growthAfter.includes('+') && growthAfter.includes('XP'), true);
+    await cdp.shot('14-growth-after-reward');
   } finally {
     clearTimeout(watchdog);
     try {
