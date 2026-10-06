@@ -51,7 +51,7 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
             alt=""
             aria-hidden
             data-growth-card-rays
-            style={{ width: 176, height: 176 }}
+            style={{ width: 200, height: 200 }}
             className="pixel-blink pointer-events-none absolute object-contain [image-rendering:pixelated]"
           />
 
