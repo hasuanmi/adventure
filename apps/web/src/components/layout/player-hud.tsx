@@ -48,7 +48,7 @@ export function PlayerHud({
     >
       {/* 昵称：头像右上区域 */}
       <span
-        className="absolute right-1 top-0 max-w-[7rem] truncate text-xs font-extrabold tracking-wide text-panelLight"
+        className="absolute right-8 top-1.5 max-w-[8rem] truncate text-sm font-extrabold tracking-wide text-panelLight"
         data-hud-nickname
         style={{ textShadow: '1px 1px 0 rgba(0,0,0,0.35)' }}
       >
