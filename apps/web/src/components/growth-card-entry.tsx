@@ -36,13 +36,13 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
 
   return (
     <>
-      <div className="mt-3 flex flex-col items-center">
+      <div className="mt-3 flex flex-col items-center overflow-visible">
         <button
           type="button"
           data-growth-card-entry
           data-growth-card-claimed={claimed ? 'true' : 'false'}
           onClick={() => setOpen(true)}
-          className="group relative grid place-items-center transition active:translate-y-1"
+          className="group relative grid place-items-center overflow-visible transition active:translate-y-1"
           aria-label={claimed ? '今日成长卡已领取，查看成长卡' : '领取今日成长卡'}
         >
           {/* 放射状散射光（像素素材，缓慢旋转；纯装饰，不参与点击） */}
@@ -59,8 +59,7 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
           <span
             data-growth-card-badge
             className={cn(
-              'relative grid h-14 w-14 place-items-center rounded-full border-[3px] border-ink shadow-pixel',
-              'bg-panelLight',
+              'relative grid h-14 w-14 place-items-center overflow-visible rounded-full border-[3px] border-ink',
             )}
           >
             <img
