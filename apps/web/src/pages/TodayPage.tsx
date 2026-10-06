@@ -6,6 +6,7 @@ import { TaskDto } from '@huahua/shared-types';
 import { Empty } from '../components/ui/empty';
 import { Panel, PanelHeader } from '../components/ui/card';
 import { AdventureProgress } from '../components/adventure-progress';
+import { AttendanceCard } from '../components/attendance-card';
 import { Skeleton } from '../components/ui/skeleton';
 import { TaskCard } from '../components/task-card';
 import { WeekCheckin } from '../components/week-checkin';
@@ -209,6 +210,10 @@ export function TodayPage() {
           <QuickAddRow onClick={() => setCreateOpen(true)} />
         </div>
       </section>
+
+      {/* 打卡（P4）：**仅当今日任务 100% 完成后出现**（用户规则）；
+          语义与下面「本周打卡」（任务完成周格）不同：这里=每日签到 */}
+      <AttendanceCard allDone={scoped.length > 0 && percent >= 100} />
 
       {/* 本周打卡（像素格）：孩子的"我"视角才有意义（数据是本人流水） */}
       {user?.role === 'child' && <WeekCheckin />}

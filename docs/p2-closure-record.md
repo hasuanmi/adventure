@@ -753,3 +753,46 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 > 过程中修正两处**我方问题**：
 > ① 断言一开始取了错误的 DOM 层级（暖棕层实为外层容器背景，不是独立子元素）→ 改为直接测外层背景色；
 > ② 100% 用例只到 75%——因为带审批的任务**正确地**卡在 pending 闸门，测试脚本补上"家长批准待审批项"这一步（这也是真实业务路径）。
+
+---
+
+## 23. P4 打卡（Attendance）落地（2026-10-06）
+
+用户确认开发顺序为**先打卡、再错题本**，并给定两条产品规则：
+① 打卡入口**在今日任务 100% 完成后**才出现；② 错题本与 AI 解题放到底部新增的第三格「学习」。
+
+### 23.1 后端（P4，逻辑迁移自 WorkPulse，MIT）
+
+| 层 | 内容 |
+|---|---|
+| 模型 | `attendances`：`id / family_id / user_id / attendance_date(DATE) / check_in_at / check_out_at? / total_minutes? / status`；**无 deleted_at**（行为流水无删除语义，同 `reward_grants` 惯例） |
+| 防重 | **迁移里手写唯一索引** `uniq_attendances_user_date(user_id, attendance_date)` = 第一道闸；服务层预检 → 409 + 捕获 Prisma `P2002` → 409 **双保险**（并发安全） |
+| 服务 | `checkIn` / `checkOut`（无记录或未打卡 → 400；已签退 → 409；`total_minutes = max(0, round((now−checkIn)/60000))`）/ `today`（三态）/ `history`（`?month=YYYY-MM` 或 `?from&to`，默认本月） |
+| 时区 | `ATTENDANCE_TIMEZONE`（默认 Asia/Shanghai）经 shared-types 纯函数 `calendarDateInTimeZone`（Intl，en-CA）算日历日；时间戳存 UTC、日期存 DATE |
+| API | `GET /attendance/today`、`POST /attendance/check-in`、`POST /attendance/check-out`、`GET /attendance?month=`（归属一律取 JWT 的 familyId + userId；**不使用 /families/... 子路由**，因硬基线无 Family 模块） |
+| 共享逻辑 | `packages/shared-types/src/attendance.ts`：DTO、三态、原因码、`calendarDateInTimeZone`、`attendanceMinutes`、`attendanceTodayState`（Web/Mobile/API 共用纯函数） |
+
+**未做（明确不做，符合 v1.2 决策）**：GPS/QR/人脸打卡、补卡、连续 streak、打卡奖励或漏打卡惩罚、工时换算、ABSENT/HALF_DAY（V1 仅 present）。
+
+### 23.2 前端
+
+- **今日页打卡卡**（`components/attendance-card.tsx`）：`allDone`（今日任务 100%）才渲染 —— 未打卡显示「打卡」，已打卡显示「签退」，已签退显示时长；409 有独立文案；卡片含「打卡历史 →」。
+- **打卡历史页**（`pages/AttendancePage.tsx`，`/attendance`）：今日状态 + **月度点阵**（周一为起点的 7 列，已打卡日显示绿色 ✓，可上/下月切换）+ 本月合计天数。
+- 语义提示：页面明确写「打卡 = 每日签到（与任务完成周格无关）」，避免与成长页「本周打卡」混淆。
+
+### 23.3 验证
+
+`browser-check` 137 → **151 条全绿（50 秒）**，本批新增 14 条，实测：
+
+| 断言 | 实测 |
+|---|---|
+| 任务未 100% 时不显示打卡入口 | 进度 25% 时无 `[data-attendance-card]` |
+| 100% 后出现打卡入口 | 有 |
+| 打卡成功 | HTTP **201** |
+| 同一天重复打卡 | HTTP **409**，`reason = attendance_already_checked_in` |
+| UI 状态与按钮切换 | 已打卡 + 显示「签退」且「打卡」按钮消失 |
+| UI 签退 | 显示 `total_minutes = 0`（派生）+ 文案「今日已签退 · 时长 0 分钟」 |
+| 重复签退 | HTTP **409** |
+| 月度点阵 | 渲染 31 格、今日被标记、历史页今日状态 `CHECKED_OUT` |
+
+> 备注：本模块的 CI 覆盖走 `browser-check`（真实 HTTP + DB + 浏览器）。API 级 vitest e2e spec 未单独补（现有 `test:e2e` 指向手工启动的 3100 端口），如需纳入 CI 另开工单。

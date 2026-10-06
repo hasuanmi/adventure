@@ -26,6 +26,7 @@ model User {
   completions   TaskCompletion[] @relation("CompletionChild")
   growth        UserGrowth?
   rewardGrants  RewardGrant[]    @relation("GrantUser")
+  attendances   Attendance[]     @relation("AttendanceUser")
 
   @@map("users")
 }
@@ -242,4 +243,32 @@ model RewardProfile {
   tasks Task[]
 
   @@map("reward_profiles")
+}
+
+// =====================================================================
+// P4：Attendance（打卡）—— 数据模型直接迁移 WorkPulse（MIT）
+// 决策（v1.2 §18#4）：**完全独立于 Task**，仅 user_id + attendance_date；
+// 防重第一道闸是**迁移里手写的唯一索引** uniq_attendances_user_date
+// （并发下由 DB 兜底，服务层再捕获 23505 → 409 双保险，故此处不写 @@unique）。
+// 不设 deleted_at：打卡是行为流水，V1 无删除语义（同 reward_grants 惯例）。
+// =====================================================================
+model Attendance {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId       String    @map("family_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  attendanceDate DateTime  @map("attendance_date") @db.Date
+  checkInAt      DateTime  @map("check_in_at") @db.Timestamptz(6)
+  checkOutAt     DateTime? @map("check_out_at") @db.Timestamptz(6)
+  // 由 check_in/check_out 派生（分钟）；未签退为 null
+  totalMinutes   Int?      @map("total_minutes")
+  status         String    @default("present") @db.VarChar(16)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation("AttendanceUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([familyId], name: "idx_attendances_family_id")
+  @@index([userId], name: "idx_attendances_user_id")
+  @@map("attendances")
 }

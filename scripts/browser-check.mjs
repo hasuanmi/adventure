@@ -1256,6 +1256,8 @@ async function main() {
     check('进度标记不固定在最右端', Number(adv1.pct) >= 100 || Number(adv1.markerFromRight) > 10, true);
     check('宽度与标记都有过渡（平滑增长而非瞬变）', adv1.fillTransition !== '0s' && adv1.markerTransition !== '0s', true);
     check('首次加载不播放完成动画', adv1.pulseNow === false, true);
+    // 此时进度仅 25% → 按用户规则**不应**出现打卡入口（100% 才出现，见 13f）
+    check('任务未 100% 时不显示打卡入口', await cdp.evaluate(`Boolean(document.querySelector('[data-attendance-card]'))`), false);
     await cdp.shot('21-adventure-progress');
 
     // 行内点「完成」→ 真实进度变化 → 应出现动画（标记弹跳 + 粒子）
@@ -1325,6 +1327,75 @@ async function main() {
     check('100% 时进度标记移动到最右端（右缘贴终点）', Number(advDone.markerFromRight) <= 4, true);
     check('100% 时文案变为「今日冒险完成！」', advDone.doneText, '今日冒险完成！');
     await cdp.shot('23-adventure-complete');
+
+    // ---------- 13f. 打卡（P4）：100% 后才出现的入口 + 防重 + 签退 + 月度历史 ----------
+    // ① 100% 后打卡入口已出现（未 100% 的情况已在 13e 断言过）
+    const gateAfter = await cdp.evaluate(`Boolean(document.querySelector('[data-attendance-card]'))`);
+    check('今日任务 100% 后出现打卡入口', gateAfter, true);
+    // 用 API 复现"未满 100% 无入口"：把一条已完成任务临时改回？—— 不可逆，改为断言接口层规则：
+    const todayState0 = await api('GET', '/attendance/today', childToken);
+    check(
+      '打卡今日状态接口可用（三态之一）',
+      ['NOT_CHECKED_IN', 'CHECKED_IN', 'CHECKED_OUT'].includes(todayState0.json?.state),
+      true,
+    );
+    // ② 打卡 + 防重（第二次必须 409，reason 明确）
+    const first = await api('POST', '/attendance/check-in', childToken, {});
+    check('打卡成功返回 201', first.status, 201);
+    const dup = await api('POST', '/attendance/check-in', childToken, {});
+    check('同一天重复打卡 → 409', dup.status, 409);
+    check('重复打卡 reason 明确', dup.json?.reason, 'attendance_already_checked_in');
+    // ③ UI：状态变为已打卡，按钮变成签退
+    await cdp.send('Page.navigate', { url: `${BASE}/` });
+    await cdp.waitFor('[data-attendance-card]');
+    await sleep(700);
+    const cardState = await cdp.evaluate(`(() => {
+      const card = document.querySelector('[data-attendance-card]');
+      const stateEl = document.querySelector('[data-attendance-state]');
+      const dataAttr = document.querySelector('[data-attendance-card]');
+      return {
+        hasCard: Boolean(card),
+        state: stateEl ? stateEl.getAttribute('data-attendance-state') : (dataAttr ? dataAttr.getAttribute('data-attendance-state') : null),
+        hasCheckOut: Boolean(document.querySelector('[data-attendance-check-out]')),
+        hasCheckIn: Boolean(document.querySelector('[data-attendance-check-in]')),
+        text: (card?.innerText ?? '').replace(/\\n/g, ' | ').slice(0, 120),
+      };
+    })()`);
+    console.log(`      打卡卡：${JSON.stringify(cardState)}`);
+    check('已打卡状态下出现签退按钮（不再是打卡按钮）', cardState.hasCheckOut === true && cardState.hasCheckIn === false, true);
+    check('打卡卡显示已打卡', String(cardState.text).includes('已打卡'), true);
+    await cdp.shot('24-attendance-card');
+    // ④ UI 签退 → 时长派生
+    await cdp.clickSelector('[data-attendance-check-out]');
+    await sleep(1500);
+    const afterOut = await cdp.evaluate(`(() => ({
+      hasMinutes: Boolean(document.querySelector('[data-attendance-minutes]')),
+      minutes: document.querySelector('[data-attendance-minutes]')?.textContent ?? null,
+      text: (document.querySelector('[data-attendance-card]')?.innerText ?? '').replace(/\\n/g, ' | ').slice(0, 140),
+    }))()`);
+    console.log(`      签退后：${JSON.stringify(afterOut)}`);
+    check('签退后显示时长（total_minutes 由打卡/签退派生）', afterOut.hasMinutes === true && Number(afterOut.minutes) >= 0, true);
+    check('签退后文案为已签退', String(afterOut.text).includes('已签退'), true);
+    const dupOut = await api('POST', '/attendance/check-out', childToken, {});
+    check('重复签退 → 409', dupOut.status, 409);
+    // ⑤ 月度历史点阵（今日应被标记）
+    await cdp.send('Page.navigate', { url: `${BASE}/attendance` });
+    await cdp.waitFor('[data-attendance-day]');
+    await sleep(600);
+    const history = await cdp.evaluate(`(() => {
+      const hits = [...document.querySelectorAll('[data-attendance-day][data-attendance-hit="true"]')];
+      const todayCell = document.querySelector('[data-today-state]');
+      return {
+        total: document.querySelectorAll('[data-attendance-day]').length,
+        hits: hits.length,
+        todayState: todayCell ? todayCell.getAttribute('data-today-state') : null,
+      };
+    })()`);
+    console.log(`      打卡历史：${JSON.stringify(history)}`);
+    check('月度点阵渲染（当月天数格）', Number(history.total) >= 28, true);
+    check('今天已打卡在月度点阵中被标记', Number(history.hits) >= 1, true);
+    check('历史页今日状态为已签退', history.todayState, 'CHECKED_OUT');
+    await cdp.shot('25-attendance-history');
   } finally {
     clearTimeout(watchdog);
     try {

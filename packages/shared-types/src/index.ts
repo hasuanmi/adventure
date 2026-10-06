@@ -10,5 +10,6 @@ export * from './task-icon';
 export * from './completion';
 export * from './approval';
 export * from './growth';
+export * from './attendance';
 export * from './reward-profile';
 export * from './schedule-conflict';

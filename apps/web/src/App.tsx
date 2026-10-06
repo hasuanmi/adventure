@@ -6,6 +6,7 @@ import { Spinner } from './components/ui/spinner';
 import { useSession } from './hooks/use-session';
 import { useSessionBootstrap } from './hooks/use-session-bootstrap';
 import { ApprovalsPage } from './pages/ApprovalsPage';
+import { AttendancePage } from './pages/AttendancePage';
 import { FamilyPage } from './pages/FamilyPage';
 import { GrowthPage } from './pages/GrowthPage';
 import { LoginPage } from './pages/LoginPage';
@@ -56,6 +57,7 @@ export function App() {
         {/* /tasks 列表入口重定向到今日（任务并入今日；子路由保留兼容） */}
         <Route path="/tasks" element={<Navigate to="/" replace />} />
         <Route path="/schedule" element={withLayout(<SchedulePage />)} />
+        <Route path="/attendance" element={withLayout(<AttendancePage />)} />
         <Route path="/growth" element={withLayout(<GrowthPage />)} />
         <Route path="/approvals" element={withLayout(<ApprovalsPage />)} />
         <Route path="/family" element={withLayout(<FamilyPage />)} />

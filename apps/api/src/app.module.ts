@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { ApprovalModule } from './approval/approval.module';
+import { AttendanceModule } from './attendance/attendance.module';
 import { AuthModule } from './auth/auth.module';
 import { CompletionModule } from './completion/completion.module';
 import { FamilyModule } from './family/family.module';
@@ -34,6 +35,7 @@ import { TaskModule } from './task/task.module';
     ApprovalModule,
     GrowthModule,
     RewardProfileModule,
+    AttendanceModule,
   ],
 })
 export class AppModule {}
