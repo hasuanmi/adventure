@@ -3,8 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MASTERY_LABELS, type MasteryLevel } from '@huahua/shared-types';
 import { Panel } from '../components/ui/card';
+import { AutoGrowTextarea } from '../components/ui/auto-grow-textarea';
 import { Skeleton } from '../components/ui/skeleton';
 import { ApiError } from '../lib/api/client';
+import { aiApi } from '../lib/api/ai';
 import { wrongQuestionsApi } from '../lib/api/wrong-questions';
 import { subjectMeta } from '../lib/constants';
 import { WrongQuestionNav } from '../components/wrong-question-nav';
@@ -39,6 +41,7 @@ export function WrongQuestionDetailPage() {
   const queryClient = useQueryClient();
   const [notes, setNotes] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reanswerResult, setReanswerResult] = useState<Record<string, string | null> | null>(null);
 
   const question = useQuery({ queryKey: ['wrong-question', id], queryFn: () => wrongQuestionsApi.get(id) });
   const reviews = useQuery({ queryKey: ['wrong-question-reviews', id], queryFn: () => wrongQuestionsApi.reviews(id) });
@@ -67,6 +70,35 @@ export function WrongQuestionDetailPage() {
       refresh();
     },
     onError: () => setError('笔记保存失败'),
+  });
+
+  /** AI 重解（对照上游 POST /api/reanswer：重新审题给出答案/解析/错因） */
+  const reanswer = useMutation({
+    mutationFn: () =>
+      aiApi.reanswer({
+        questionText: question.data?.questionText ?? '',
+        wrongAnswerText: question.data?.wrongAnswerText ?? null,
+      }),
+    onSuccess: (result) => setReanswerResult(result.fields),
+    onError: (err) =>
+      setError(err instanceof Error && err.message.includes('ai_not_configured') ? 'AI 未配置' : 'AI 重解失败'),
+  });
+  /** 把 AI 重解结果写回题目（上游：重解后可保存） */
+  const applyReanswer = useMutation({
+    mutationFn: () =>
+      wrongQuestionsApi.update(id, {
+        answerText: reanswerResult?.answer_text ?? undefined,
+        analysis: reanswerResult?.analysis ?? undefined,
+        mistakeAnalysis: reanswerResult?.mistake_analysis ?? undefined,
+        mistakeStatus: reanswerResult?.mistake_status ?? undefined,
+        wrongAnswerText: reanswerResult?.wrong_answer_text ?? undefined,
+        geogebraCommands: reanswerResult?.geogebra_commands ?? undefined,
+      }),
+    onSuccess: () => {
+      setReanswerResult(null);
+      refresh();
+    },
+    onError: () => setError('应用 AI 结果失败'),
   });
   const remove = useMutation({
     mutationFn: () => wrongQuestionsApi.remove(id),
@@ -179,16 +211,53 @@ export function WrongQuestionDetailPage() {
         {error && <p className="mt-2 text-xs font-bold text-danger">{error}</p>}
       </Panel>
 
+      {/* AI 重解（上游 /api/reanswer） */}
+      <Panel>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-extrabold text-ink">AI 重解</p>
+          <button
+            type="button"
+            data-ai-reanswer
+            disabled={reanswer.isPending || !q.questionText}
+            onClick={() => {
+              setError(null);
+              setReanswerResult(null);
+              reanswer.mutate();
+            }}
+            className="border-2 border-ink bg-[#7a5c38] px-3 py-1 text-xs font-extrabold text-white shadow-pixel active:translate-y-0.5 disabled:opacity-50"
+          >
+            {reanswer.isPending ? 'AI 重解中…' : '让 AI 重新审题'}
+          </button>
+        </div>
+        {reanswerResult && (
+          <div data-reanswer-result className="mt-2 space-y-1 border-t-2 border-dashed border-ink/30 pt-2">
+            <Field label="AI 答案" value={reanswerResult.answer_text} />
+            <Field label="AI 解析" value={reanswerResult.analysis} />
+            <Field label="AI 错因分析" value={reanswerResult.mistake_analysis} />
+            <Field label="AI 判定作答状态" value={reanswerResult.mistake_status} />
+            <Field label="GeoGebra 命令" value={reanswerResult.geogebra_commands} />
+            <button
+              type="button"
+              data-apply-reanswer
+              disabled={applyReanswer.isPending}
+              onClick={() => applyReanswer.mutate()}
+              className="mt-1 border-2 border-ink bg-accent px-3 py-1 text-xs font-extrabold text-white shadow-pixel active:translate-y-0.5 disabled:opacity-50"
+            >
+              用 AI 结果更新这道题
+            </button>
+          </div>
+        )}
+      </Panel>
+
       {/* 笔记（上游 PATCH /:id/notes） */}
       <Panel>
         <p className="text-sm font-extrabold text-ink">笔记</p>
-        <textarea
-          rows={3}
+        <AutoGrowTextarea
           data-wrong-question-notes
           value={notesValue}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="记录自己的心得、易错点…"
-          className="mt-1 w-full border-2 border-ink bg-panelLight px-2 py-1.5 text-sm"
+          className="mt-1 min-h-[4rem] w-full border-2 border-ink bg-panelLight px-2 py-1.5 text-sm"
         />
         <button
           type="button"

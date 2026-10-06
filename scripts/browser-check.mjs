@@ -1574,6 +1574,90 @@ async function main() {
     const wqList = Array.isArray(afterDelete.json) ? afterDelete.json : (afterDelete.json?.items ?? []);
     check('删除后不再出现在列表（软删除）', wqList.some((w) => w.id === firstId) === false, true);
 
+    // ---------- 13j. 批量删除 / 清空 / 导出 / 导入 / AI 重解 ----------
+    // 造两道题（走 API 更快；列表页做批量操作）
+    for (const tag of ['批量A', '批量B']) {
+      await api('POST', '/wrong-questions', childToken, {
+        subject: 'math',
+        questionText: `${tag} ${STAMP}：1+${tag === '批量A' ? '1' : '2'}=?`,
+      });
+    }
+    const exportRes = await api('GET', '/wrong-questions/export', childToken);
+    check('导出接口返回版本与题目数组', exportRes.status === 200 && Array.isArray(exportRes.json?.questions), true);
+    const exportedCount = Number(exportRes.json?.questions?.length ?? 0);
+    // 导入同一份备份 → 全部按题干去重跳过
+    const importRes = await api('POST', '/wrong-questions/import', childToken, {
+      version: 1,
+      questions: exportRes.json?.questions ?? [],
+    });
+    check('导入接口可用且按题干去重', importRes.status === 201 && Number(importRes.json?.skipped) >= 1, true);
+
+    // 批量删除（先取一页里的两个 id）
+    const pageList = await api('GET', '/wrong-questions?pageSize=2', childToken);
+    const twoIds = (pageList.json?.items ?? []).slice(0, 2).map((x) => x.id);
+    if (twoIds.length === 2) {
+      const bd = await api('POST', '/wrong-questions/batch-delete', childToken, { ids: twoIds });
+      check('批量删除接口可用', bd.status === 201 && Number(bd.json?.deleted) === 2, true);
+    }
+
+    // UI：批量选择 → 勾选 → 删除选中（先补两道，避免前面 API 删除后列表为空）
+    for (const tag of ['界面批量A', '界面批量B']) {
+      await api('POST', '/wrong-questions', childToken, {
+        subject: 'math',
+        questionText: `${tag} ${STAMP}：2+2=?`,
+      });
+    }
+    await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions` });
+    await cdp.waitFor('[data-wrong-question-card]');
+    await cdp.clickSelector('[data-batch-toggle]');
+    await sleep(300);
+    await cdp.clickSelector('[data-select-all]');
+    await sleep(300);
+    const selectedText = await cdp.evaluate(`document.querySelector('[data-batch-toggle]')?.textContent ?? ''`);
+    check('批量选择可全选本页', /批量选择中（[1-9]/.test(selectedText), true);
+    await cdp.shot('36-batch-select');
+    await cdp.clickSelector('[data-batch-delete]');
+    await sleep(1500);
+    check('批量删除后列表清空', (await cdp.evaluate(`document.querySelectorAll('[data-wrong-question-card]').length`)) === 0, true);
+    const afterBatch = await api('GET', '/wrong-questions', childToken);
+    check('批量删除为软删除（列表不含已删）', (afterBatch.json?.items ?? []).length, 0);
+
+    // 导出按钮真的下载（CDP 允许下载并读取文件名）
+    await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: join(ROOT, 'ui-shots', 'downloads') }).catch(() => {});
+    await cdp.clickSelector('[data-export]');
+    await sleep(1500);
+    const exportNotice = await cdp.evaluate(`document.querySelector('[data-batch-result]')?.textContent ?? ''`);
+    console.log(`      导出：${JSON.stringify(exportNotice)}`);
+    check('导出按钮给出结果提示', String(exportNotice).includes('已导出'), true);
+
+    // 清空全部（两步确认）
+    await cdp.clickSelector('[data-clear-all]');
+    await sleep(200);
+    const confirmText = await cdp.evaluate(`document.querySelector('[data-clear-all]')?.textContent ?? ''`);
+    check('清空全部需要二次确认', String(confirmText).includes('再点一次'), true);
+
+    // AI 重解（详情页）：走真模型（未配置时跳过）
+    const aiStatus2 = await api('GET', '/ai/status', childToken);
+    if (aiStatus2.json?.configured) {
+      const created = await api('POST', '/wrong-questions', childToken, {
+        subject: 'math',
+        questionText: `重解测试 ${STAMP}：小明把 3+4 算成了 8`,
+        wrongAnswerText: '8',
+      });
+      const reId = created.json?.id;
+      await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions/${reId}` });
+      await cdp.waitFor('[data-ai-reanswer]');
+      await cdp.clickSelector('[data-ai-reanswer]');
+      await cdp.waitFor('[data-reanswer-result]', 90_000);
+      const reText = await cdp.evaluate(
+        `(document.querySelector('[data-reanswer-result]')?.innerText ?? '').replace(/\\n/g, ' | ').slice(0, 120)`,
+      );
+      console.log(`      AI 重解：${reText}`);
+      check('AI 重解返回答案/解析', /答案|解析/.test(reText), true);
+      await cdp.shot('37-ai-reanswer');
+      await api('DELETE', `/wrong-questions/${reId}`, childToken);
+    }
+
     // ---------- 13h. AI 适配层（P6-3 骨架）：未配置时明确报错，且密钥绝不下发 ----------
     const aiStatus = await api('GET', '/ai/status', childToken);
     console.log(`      AI 状态：${JSON.stringify(aiStatus.json)}`);
@@ -1698,6 +1782,25 @@ async function main() {
     check('已删除「试卷」', formUi.hasPaper, false);
     check('已删除「错误类型」', formUi.hasErrorType, false);
     check('已删除"图片上传在下一批…"注释', formUi.hasLegacyNote, false);
+
+    // 长文本输入框必须**自动撑高**（不要内部滚动条）
+    const grow = await cdp.evaluate(`(() => {
+      const el = document.querySelector('textarea[name="questionText"]');
+      if (!el) return null;
+      const before = el.getBoundingClientRect().height;
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set;
+      setter.call(el, Array.from({ length: 12 }, (_, i) => '第' + (i + 1) + '行长文本内容').join('\\n'));
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return new Promise((resolve) => setTimeout(() => resolve({
+        before: Math.round(before),
+        after: Math.round(el.getBoundingClientRect().height),
+        overflow: getComputedStyle(el).overflowY,
+        scrollable: el.scrollHeight > el.clientHeight + 1,
+      }), 120));
+    })()`);
+    console.log(`      自适应文本框：${JSON.stringify(grow)}`);
+    check('长文本输入框随内容自动撑高', Number(grow?.after) > Number(grow?.before), true);
+    check('输入框不出现内部滚动条', grow?.overflow === 'hidden' && grow?.scrollable === false, true);
 
     // 切换学科 → 错因选项随之变为语言类
     await cdp.evaluate(`(() => {

@@ -10,6 +10,7 @@ import {
   WRONG_QUESTION_REASON,
   WRONG_QUESTION_SUBJECTS,
   WrongQuestionDto,
+  WrongQuestionExportDto,
   WrongQuestionListDto,
   WrongQuestionListQuery,
   WrongQuestionReviewDto,
@@ -318,6 +319,107 @@ export class WrongQuestionService {
       })),
       last30Days: days,
     };
+  }
+
+  /** 批量删除（对照上游 POST /api/error-items/batch-delete；软删除） */
+  async batchDelete(actor: RequestActor, ids: string[]): Promise<{ deleted: number }> {
+    const { familyId } = this.requireFamily(actor);
+    const childId = await this.resolveChildId(actor, undefined);
+    if (!ids?.length) return { deleted: 0 };
+    const result = await this.prisma.wrongQuestion.updateMany({
+      where: { id: { in: ids }, familyId, childId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+    return { deleted: result.count };
+  }
+
+  /** 清空（对照上游 DELETE /api/error-items/clear；软删除本人全部） */
+  async clear(actor: RequestActor): Promise<{ deleted: number }> {
+    const { familyId } = this.requireFamily(actor);
+    const childId = await this.resolveChildId(actor, undefined);
+    const result = await this.prisma.wrongQuestion.updateMany({
+      where: { familyId, childId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+    return { deleted: result.count };
+  }
+
+  /** 导出（对照上游 GET /api/export：JSON 备份，含知识点与复习记录） */
+  async exportAll(actor: RequestActor): Promise<WrongQuestionExportDto> {
+    const { familyId } = this.requireFamily(actor);
+    const childId = await this.resolveChildId(actor, undefined);
+    const rows = await this.prisma.wrongQuestion.findMany({
+      where: { familyId, childId, deletedAt: null },
+      include: { tags: true, reviews: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      questions: rows.map((row) => ({
+        ...this.toDto(row),
+        // 导入时按名称回接标签（标签 id 跨库不稳定）
+        tagNames: row.tags.map((t) => t.name),
+        reviews: row.reviews.map((r) => ({
+          scheduledFor: r.scheduledFor.toISOString(),
+          completedAt: r.completedAt ? r.completedAt.toISOString() : null,
+          isCorrect: r.isCorrect,
+        })),
+      })),
+    };
+  }
+
+  /** 导入（对照上游 POST /api/import：事务化；同题干重复则跳过） */
+  async importAll(
+    actor: RequestActor,
+    payload: { questions?: Partial<WrongQuestionDto>[] },
+  ): Promise<{ imported: number; skipped: number }> {
+    const { familyId } = this.requireFamily(actor);
+    const childId = await this.resolveChildId(actor, undefined);
+    const incoming = payload?.questions ?? [];
+    let imported = 0;
+    let skipped = 0;
+
+    // 去重口径与录入一致（题干前 100 字符）：先一次性建索引，避免逐条误判
+    const existingRows = await this.prisma.wrongQuestion.findMany({
+      where: { familyId, childId, deletedAt: null },
+      select: { questionText: true },
+    });
+    const existingKeys = new Set(existingRows.map((r) => questionDedupeKey(r.questionText)).filter(Boolean));
+
+    for (const item of incoming) {
+      const key = questionDedupeKey(item.questionText);
+      if (key && existingKeys.has(key)) {
+        skipped += 1;
+        continue;
+      }
+      await this.prisma.wrongQuestion.create({
+        data: {
+          familyId,
+          childId,
+          createdBy: actor.sub,
+          subject: item.subject ?? null,
+          originalImageKey: null, // 导出的图片 key 只在本机存储有效，导入时置空
+          ocrText: item.ocrText ?? null,
+          questionText: item.questionText ?? null,
+          answerText: item.answerText ?? null,
+          analysis: item.analysis ?? null,
+          wrongAnswerText: item.wrongAnswerText ?? null,
+          mistakeAnalysis: item.mistakeAnalysis ?? null,
+          mistakeStatus: item.mistakeStatus ?? null,
+          geogebraCommands: item.geogebraCommands ?? null,
+          source: item.source ?? null,
+          errorType: item.errorType ?? null,
+          userNotes: item.userNotes ?? null,
+          masteryLevel: item.masteryLevel ?? 0,
+          gradeSemester: item.gradeSemester ?? null,
+          paperLevel: item.paperLevel ?? null,
+        },
+      });
+      imported += 1;
+      if (key) existingKeys.add(key); // 同一批备份里的重复项也只导入一次
+    }
+    return { imported, skipped };
   }
 
   // ---- 内部 ----

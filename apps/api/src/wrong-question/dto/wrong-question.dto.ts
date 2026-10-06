@@ -65,3 +65,14 @@ export class CreateWrongQuestionReviewDto {
   @IsOptional() @IsString() completedAt?: string | null;
   @IsOptional() @IsBoolean() isCorrect?: boolean | null;
 }
+
+/** 批量删除（上游 POST /api/error-items/batch-delete） */
+export class BatchDeleteDto {
+  @IsArray() @IsString({ each: true }) ids!: string[];
+}
+
+/** 导入（上游 POST /api/import：JSON 备份体） */
+export class ImportWrongQuestionsDto {
+  @IsOptional() @IsInt() version?: number;
+  @IsOptional() @IsArray() questions?: Record<string, unknown>[];
+}

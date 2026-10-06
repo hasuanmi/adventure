@@ -1,10 +1,19 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { WrongQuestionDto, WrongQuestionListDto, WrongQuestionReviewDto, WrongQuestionStatsDto } from '@huahua/shared-types';
+import {
+  WrongQuestionDto,
+  WrongQuestionExportDto,
+  WrongQuestionImportResult,
+  WrongQuestionListDto,
+  WrongQuestionReviewDto,
+  WrongQuestionStatsDto,
+} from '@huahua/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard, RequestActor } from '../auth/jwt-auth.guard';
 import {
+  BatchDeleteDto,
   CreateWrongQuestionDto,
   CreateWrongQuestionReviewDto,
+  ImportWrongQuestionsDto,
   ListWrongQuestionDto,
   SetMasteryDto,
   UpdateNotesDto,
@@ -37,6 +46,33 @@ export class WrongQuestionController {
   @Get('stats')
   async stats(@CurrentUser() actor: RequestActor): Promise<WrongQuestionStatsDto> {
     return this.wrongQuestion.stats(actor);
+  }
+
+  // 注意：以下静态路由必须声明在 :id 之前（对照上游 batch-delete / clear / export / import）
+  @Post('batch-delete')
+  async batchDelete(
+    @CurrentUser() actor: RequestActor,
+    @Body() dto: BatchDeleteDto,
+  ): Promise<{ deleted: number }> {
+    return this.wrongQuestion.batchDelete(actor, dto.ids);
+  }
+
+  @Delete('clear')
+  async clear(@CurrentUser() actor: RequestActor): Promise<{ deleted: number }> {
+    return this.wrongQuestion.clear(actor);
+  }
+
+  @Get('export')
+  async exportAll(@CurrentUser() actor: RequestActor): Promise<WrongQuestionExportDto> {
+    return this.wrongQuestion.exportAll(actor);
+  }
+
+  @Post('import')
+  async importAll(
+    @CurrentUser() actor: RequestActor,
+    @Body() dto: ImportWrongQuestionsDto,
+  ): Promise<WrongQuestionImportResult> {
+    return this.wrongQuestion.importAll(actor, dto);
   }
 
   @Get(':id')

@@ -981,3 +981,47 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 "直接录入下面直接就是表单"（且**不再跳转**到独立页）、作答状态选项 = 不会做/做错了、
 数学错因选项正确、切到语文后错因选项正确、年级学期三级下拉且默认"小学五年级上学期"、
 无「试卷」、无「错误类型」、无遗留注释。
+
+---
+
+## 28. 自适应文本框 + 批量删除/清空 + 导入导出 + AI 重解（2026-10-06）
+
+### 28.1 长文本输入框自动撑高（用户要求）
+
+"题干、解析、笔记等需要输入大量文字的，直接延伸框就行，全部显示文字，**不要做下拉条让用户划动**"。
+
+- 新增 `components/ui/auto-grow-textarea.tsx`：高度跟随 `scrollHeight` 实时调整（挂载 / 值变化 / ResizeObserver 宽度变化都重算），`resize-none overflow-hidden`
+- 应用到：错题表单全部大文本字段（题干/正确答案/解析/学生错误答案/错因分析/笔记）、详情页笔记、AI 识别页的题目文字框
+- **踩坑**：`border-box` 下 `scrollHeight` **不含上下边框**，只 `+2` 会让内容比可视高度多 2px → 仍出微型滚动条。
+  改为 `height = scrollHeight + (offsetHeight - clientHeight)` 后 `scrollable=false` 实测通过
+
+### 28.2 批量删除 / 清空（对照上游 batch-delete 与 clear）
+
+`POST /wrong-questions/batch-delete`（`{ids}`）、`DELETE /wrong-questions/clear`，均为**软删除且限定本人**。
+列表页新增「批量选择」模式（达标：全选本页 / 删除选中）、「清空全部」**两步确认**（第二次点击才执行）。
+> 批量模式下点卡片 = 勾选而不是跳转（避免把可点元素嵌进链接里）。
+
+### 28.3 导入 / 导出（对照上游 /api/export 与 /api/import）
+
+- 导出：`GET /wrong-questions/export` → `{version, exportedAt, questions[]}`（含知识点名称与复习记录）；前端生成 JSON 文件下载
+- 导入：`POST /wrong-questions/import`；**去重口径与录入一致**（题干前 100 字符），重复的跳过并回报 `{imported, skipped}`
+- **自己修掉的一个真 bug**：导入去重原先用 `findFirst` 取一条再比对，取到的**不一定是同题** → 会把重复项当成新题导入。
+  改为一次性建"已存在去重键集合"再比对（同一批备份内的重复也只导入一次）
+
+### 28.4 AI 重解（对照上游 /api/reanswer）
+
+详情页新增「让 AI 重新审题」→ `POST /ai/reanswer`（6 个 XML 标签）→ 展示 AI 答案/解析/错因分析/判定作答状态/GeoGebra 命令 →
+「用 AI 结果更新这道题」写回。真机实测（deepseek-flash）返回："3+4=7，正确结果是 7" + 分步解析 + 错因分析。
+
+### 28.5 验证
+
+`browser-check` 202 → **213 条全绿（85 秒）**，本批新增 11 条：
+自适应框随内容撑高且 `overflow=hidden / scrollable=false` ✓；导出接口结构 ✓；导入按题干去重 ✓；
+批量删除接口 ✓；批量全选 ✓；界面批量删除后列表清空 ✓；批量删除为软删除 ✓；
+导出按钮出结果提示 ✓；清空需二次确认 ✓；AI 重解返回答案/解析 ✓（真模型）。
+
+### 28.6 仍缺（上游清单）
+
+相似题生成（`/api/practice/generate`）、练习记录与练习统计（`/api/practice/record`、`/api/stats/practice*`）、
+标签建议与标签统计（`/api/tags/suggestions`、`/api/tags/stats`）、用户档案（`/api/user` 学段/入学年）、
+打印预览（`print-preview`）、GeoGebra 交互演示（需先确认是否保留该外网 CDN 依赖）。

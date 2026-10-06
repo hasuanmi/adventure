@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Camera, Image as ImageIcon, Loader2, PenLine, Upload } from 'lucide-react';
 import { Panel } from '../components/ui/card';
+import { AutoGrowTextarea } from '../components/ui/auto-grow-textarea';
 import { WrongQuestionNav } from '../components/wrong-question-nav';
 import { WrongQuestionForm } from '../components/wrong-question-form';
 import { aiApi, fileToDataUrl, mapAiFieldsToForm } from '../lib/api/ai';
@@ -258,13 +259,12 @@ export function WrongQuestionCapture({ variant = 'notebook' }: CaptureProps) {
 
         {mode === 'text' && (
           <div className="mt-3 space-y-2">
-            <textarea
-              rows={6}
+            <AutoGrowTextarea
               data-upload-text
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="把题目文字粘进来（例：小明把 3+4 算成了 8，请整理成错题）"
-              className="w-full border-2 border-ink bg-panelLight px-2 py-2 text-sm"
+              className="min-h-[8rem] w-full border-2 border-ink bg-panelLight px-2 py-2 text-sm"
             />
             <button
               type="button"

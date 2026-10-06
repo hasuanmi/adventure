@@ -5,6 +5,8 @@ import {
   WrongQuestionListDto,
   WrongQuestionReviewDto,
   WrongQuestionStatsDto,
+  WrongQuestionExportDto,
+  WrongQuestionImportResult,
 } from '@huahua/shared-types';
 import { request } from './client';
 
@@ -57,6 +59,24 @@ export const wrongQuestionsApi = {
     }),
   reviews: (id: string) => request<WrongQuestionReviewDto[]>(`/wrong-questions/${id}/reviews`),
   stats: () => request<WrongQuestionStatsDto>('/wrong-questions/stats'),
+  /** 批量删除（上游 /api/error-items/batch-delete） */
+  batchDelete: (ids: string[]) =>
+    request<{ deleted: number }>('/wrong-questions/batch-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    }),
+  /** 清空（上游 DELETE /api/error-items/clear） */
+  clear: () => request<{ deleted: number }>('/wrong-questions/clear', { method: 'DELETE' }),
+  /** 导出（上游 GET /api/export） */
+  exportAll: () => request<WrongQuestionExportDto>('/wrong-questions/export'),
+  /** 导入（上游 POST /api/import） */
+  importAll: (payload: { version?: number; questions: unknown[] }) =>
+    request<WrongQuestionImportResult>('/wrong-questions/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
   addReview: (id: string, body: { scheduledFor?: string; completedAt?: string | null; isCorrect?: boolean | null }) =>
     request<WrongQuestionReviewDto>(`/wrong-questions/${id}/reviews`, {
       method: 'POST',

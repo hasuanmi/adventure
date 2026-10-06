@@ -16,6 +16,7 @@ import {
   type GradeStage,
 } from '@huahua/shared-types';
 import { Panel } from './ui/card';
+import { AutoGrowTextarea } from './ui/auto-grow-textarea';
 import { ApiError } from '../lib/api/client';
 import { filesApi } from '../lib/api/files';
 import { knowledgeTagsApi, wrongQuestionsApi } from '../lib/api/wrong-questions';
@@ -168,16 +169,16 @@ export function WrongQuestionForm({ id, prefill, knowledgePoints, imageKey, onSa
     onError: () => setError('标签创建失败（可能已存在同名标签）'),
   });
 
-  const field = (label: string, key: keyof CreateWrongQuestionRequest, rows = 2, placeholder = '') => (
+  // 大段文字一律用自适应高度输入框（题干/解析/笔记…），不要内部滚动条
+  const field = (label: string, key: keyof CreateWrongQuestionRequest, placeholder = '') => (
     <label className="block">
       <span className="text-xs font-bold text-inkSoft">{label}</span>
-      <textarea
+      <AutoGrowTextarea
         name={key}
-        rows={rows}
         value={(form[key] as string) ?? ''}
         placeholder={placeholder}
         onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-        className="mt-0.5 w-full border-2 border-ink bg-panelLight px-2 py-1.5 text-sm"
+        className="mt-0.5 min-h-[3rem] w-full border-2 border-ink bg-panelLight px-2 py-1.5 text-sm"
       />
     </label>
   );
@@ -237,11 +238,11 @@ export function WrongQuestionForm({ id, prefill, knowledgePoints, imageKey, onSa
         </div>
       )}
 
-      {field('题干（必填）', 'questionText', 4, '把题目抄进来，或用「拍照上传 / AI 识别」自动填入')}
-      {field('正确答案', 'answerText', 2)}
-      {field('解析', 'analysis', 3)}
-      {field('学生的错误答案 / 过程', 'wrongAnswerText', 2)}
-      {field('错因分析', 'mistakeAnalysis', 2)}
+      {field('题干（必填）', 'questionText', '把题目抄进来，或用「拍照上传 / AI 识别」自动填入')}
+      {field('正确答案', 'answerText')}
+      {field('解析', 'analysis')}
+      {field('学生的错误答案 / 过程', 'wrongAnswerText')}
+      {field('错因分析', 'mistakeAnalysis')}
 
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
@@ -350,7 +351,7 @@ export function WrongQuestionForm({ id, prefill, knowledgePoints, imageKey, onSa
         />
       </label>
 
-      {field('笔记', 'userNotes', 2)}
+      {field('笔记', 'userNotes')}
 
       {/* 知识点标签（上游 M2M + 自定义标签） */}
       <div>

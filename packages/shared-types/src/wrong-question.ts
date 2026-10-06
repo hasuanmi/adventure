@@ -169,6 +169,23 @@ export interface WrongQuestionListDto {
   pageSize: number;
 }
 
+/** 导出/导入（对照上游 /api/export 与 /api/import：JSON 备份；导入按题干去重） */
+export interface WrongQuestionExportItem extends WrongQuestionDto {
+  tagNames: string[];
+  reviews: { scheduledFor: string; completedAt: string | null; isCorrect: boolean | null }[];
+}
+
+export interface WrongQuestionExportDto {
+  version: number;
+  exportedAt: string;
+  questions: WrongQuestionExportItem[];
+}
+
+export interface WrongQuestionImportResult {
+  imported: number;
+  skipped: number;
+}
+
 /** 统计（对照上游 /api/analytics + /api/stats/practice 的口径） */
 export interface WrongQuestionStatsDto {
   total: number;
