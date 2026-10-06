@@ -477,6 +477,28 @@ async function main() {
     } else {
       check('能取到 main 与 nav 的位置', 'not-found', 'found');
     }
+    // 整页不应出现文档级滚动（shell 是 100dvh；否则导航下面会漏出内容）
+    const docScroll = await cdp.evaluate(`(() => {
+      const nav = document.querySelector('nav');
+      const root = document.getElementById('root');
+      const shell = root ? root.firstElementChild : null;
+      const kids = shell ? [...shell.children] : [];
+      const last = kids[kids.length - 1];
+      return {
+        docH: document.documentElement.scrollHeight,
+        winH: window.innerHeight,
+        navBottom: nav ? Math.round(nav.getBoundingClientRect().bottom) : null,
+        shellH: shell ? Math.round(shell.getBoundingClientRect().height) : null,
+        lastChildIsNav: last ? last.contains(nav) : null,
+        lastChildBottom: last ? Math.round(last.getBoundingClientRect().bottom) : null,
+      };
+    })()`);
+    console.log(
+      `      外壳：doc 高 ${docScroll.docH} / 视口 ${docScroll.winH}；shell 高 ${docScroll.shellH}；` +
+        `nav 底 ${docScroll.navBottom}；最后一子元素含 nav=${docScroll.lastChildIsNav}（底 ${docScroll.lastChildBottom}）`,
+    );
+    check('无文档级滚动（doc 高 ≤ 视口高）', docScroll.docH <= docScroll.winH + 1, true);
+    check('导航是外壳最后一个元素且底边不出视口', docScroll.lastChildIsNav === true && docScroll.navBottom <= docScroll.winH + 1, true);
     // 日程页网格滚到底后也不得越过导航顶
     await cdp.evaluate(`(() => { const m = document.querySelector('main'); if (m) m.scrollTop = m.scrollHeight; })()`);
     await sleep(400);
@@ -547,6 +569,84 @@ async function main() {
     if (clock?.identifier) await cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: clock.identifier });
     await cdp.send('Page.navigate', { url: `${BASE}/schedule` });
     await cdp.waitFor('[data-day-header]');
+
+    // ---------- 4e. 日程网格几何：表头/表体分格线对齐 + 两列等宽 + 格线可见 ----------
+    const gridGeo = await cdp.evaluate(`(() => {
+      const headers = [...document.querySelectorAll('[data-day-header]')].map((e) => e.getBoundingClientRect());
+      const cols = [...document.querySelectorAll('[data-day-col]')].map((e) => e.getBoundingClientRect());
+      const lines = [...document.querySelectorAll('[data-hour-line]')].map((e) => getComputedStyle(e).borderBottomColor);
+      const panel = document.querySelector('[data-day-col]');
+      const bg = panel ? getComputedStyle(panel).backgroundColor : '';
+      const rgb = (s) => (s.match(/\\d+(\\.\\d+)?/g) || []).map(Number);
+      const lum = (s) => { const [r, g, b] = rgb(s); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+      return {
+        headerDivider: headers.length === 2 ? Math.round(headers[1].left) : null,
+        bodyDivider: cols.length === 2 ? Math.round(cols[1].left) : null,
+        headerWidths: headers.map((r) => Math.round(r.width)),
+        bodyWidths: cols.map((r) => Math.round(r.width)),
+        lineColor: lines[0] ?? null,
+        bgColor: bg,
+        lineLum: lines[0] ? Math.round(lum(lines[0])) : null,
+        bgLum: Math.round(lum(bg)),
+      };
+    })()`);
+    console.log(
+      `      网格：表头分格 x=${gridGeo.headerDivider} / 表体 x=${gridGeo.bodyDivider}；` +
+        `列宽 表头[${gridGeo.headerWidths}] 表体[${gridGeo.bodyWidths}]；` +
+        `格线 ${gridGeo.lineColor}(亮度 ${gridGeo.lineLum}) vs 背景 ${gridGeo.bgColor}(亮度 ${gridGeo.bgLum})`,
+    );
+    check('表头与表体的分格线对齐（|Δ| ≤ 2px）', Math.abs(gridGeo.headerDivider - gridGeo.bodyDivider) <= 2, true);
+    check('表头两列等宽（|Δ| ≤ 1px）', Math.abs(gridGeo.headerWidths[0] - gridGeo.headerWidths[1]) <= 1, true);
+    check('表体两列等宽（|Δ| ≤ 1px）', Math.abs(gridGeo.bodyWidths[0] - gridGeo.bodyWidths[1]) <= 1, true);
+    check('格线比背景深（亮度差 ≥ 12，不是看不清的浅灰）', gridGeo.bgLum - gridGeo.lineLum >= 12, true);
+
+    // ---------- 4f. 当前时间线的胶囊标签在左侧时间轴列内 ----------
+    const clock2 = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `
+        (() => {
+          const RealDate = Date;
+          const fixed = new RealDate(2026, 9, 6, 14, 0, 0).getTime();
+          class MockDate extends RealDate {
+            constructor(...args) { if (args.length === 0) super(fixed); else super(...args); }
+            static now() { return fixed; }
+          }
+          window.Date = MockDate;
+        })();
+      `,
+    });
+    await cdp.send('Page.navigate', { url: `${BASE}/schedule` });
+    await cdp.waitFor('[data-current-time-line]');
+    await sleep(400);
+    const pill = await cdp.evaluate(`(() => {
+      const label = document.querySelector('[data-current-time-label]');
+      const col = document.querySelector('[data-day-col]');
+      const line = document.querySelector('[data-current-time-line]');
+      if (!label || !col || !line) return null;
+      const l = label.getBoundingClientRect();
+      const c = col.getBoundingClientRect();
+      const ln = line.getBoundingClientRect();
+      const radius = parseFloat(getComputedStyle(label).borderRadius) || 0;
+      return {
+        labelLeft: Math.round(l.left), colLeft: Math.round(c.left),
+        radius, w: Math.round(l.width), h: Math.round(l.height),
+        lineW: Math.round(ln.width), lineH: Math.round(ln.height),
+        text: (label.textContent || '').trim(),
+      };
+    })()`);
+    if (pill) {
+      console.log(
+        `      时间标签：left=${pill.labelLeft}（列左 ${pill.colLeft}）圆角=${pill.radius}px 尺寸=${pill.w}x${pill.h}；` +
+          `横线 ${pill.lineW}x${pill.lineH} 文本=${pill.text}`,
+      );
+      check('时间标签位于左侧时间轴栏内（在列左边界之左）', pill.labelLeft < pill.colLeft, true);
+      check('时间标签是胶囊（圆角 ≥ 8px）', pill.radius >= 8, true);
+      check('时间标签文本为 HH:mm', /^\d{2}:\d{2}$/.test(pill.text), true);
+      check('当前时间仍是横线（宽 >> 高）', pill.lineW >= pill.lineH * 5, true);
+      await cdp.shot('16-current-time-pill');
+    } else {
+      check('固定时钟下能取到时间标签与横线', 'not-found', 'found');
+    }
+    if (clock2?.identifier) await cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: clock2.identifier });
 
     // ---------- 5. 新建任务：开始/结束时间默认今天 ----------
     await cdp.send('Page.navigate', { url: `${BASE}/` });

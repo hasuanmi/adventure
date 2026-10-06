@@ -29,6 +29,19 @@
 
 > 辅助旧色板（`packages/ui-kit/tailwind-preset.cjs`，仍被部分组件用）：primary `#2563eb`、danger `#dc2626`、success `#10b981`、surface `#f9fafb`——仅个别状态沿用（如计时器 running 蓝）。
 
+### 1.1 实现约定（**踩过坑，务必遵守**）
+
+Token 在 `apps/web/src/index.css` 里**同时**提供两份：
+
+| 形式 | 例子 | 用途 |
+|---|---|---|
+| hex | `--ink: #4a3326` | 直接 CSS / 内联样式（`var(--ink)`） |
+| RGB 通道 | `--ink-rgb: 74 51 38` | Tailwind 颜色（`rgb(var(--ink-rgb) / <alpha-value>)`） |
+
+Tailwind 侧必须写成 `rgb(var(--x-rgb) / <alpha-value>)`。**若写成 `var(--ink)`，`border-ink/30`、`bg-panel/10`、`text-panelLight/80` 这类透明度修饰类不会生成**，元素会静默退回 Tailwind 默认边框灰 `#e5e7eb` —— 2026-10-06 用户实测反馈"日程格线是灰色、很浅、看不清"即此原因（当时**全站所有 `/透明度` 类都失效**，不止日程页）。
+
+> 新增主题色时：`index.css` 里加 `--x` 与 `--x-rgb` 两份，`tailwind.config.ts` 里用 `rgb(var(--x-rgb) / <alpha-value>)`。
+
 ## 2. Layout
 
 | 层 | 旧项目实现（参考） | 说明 |

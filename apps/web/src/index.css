@@ -2,22 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Pixel 复古主题 token（docs/ui-reference.md §1） */
+/* Pixel 复古主题 token（docs/ui-reference.md §1）
+   注意：每个颜色同时给"hex"与"RGB 通道"两份。
+   · hex 版（--ink 等）供直接 CSS/内联样式使用；
+   · RGB 通道版（--ink-rgb 等）供 Tailwind 的 `rgb(var(--x-rgb) / <alpha-value>)` 使用，
+     否则 `border-ink/30`、`bg-panel/10` 这类**透明度修饰类不会生成**，
+     元素会退回 Tailwind 默认边框灰 #e5e7eb（用户实测：日程格线"灰色、很浅、看不清"就是这个原因）。 */
 :root {
   --panel: #f2e5c9;
+  --panel-rgb: 242 229 201;
   --panel-light: #f7edd9;
+  --panel-light-rgb: 247 237 217;
   --ink: #4a3326;
+  --ink-rgb: 74 51 38;
   --ink-soft: #7a5c38;
+  --ink-soft-rgb: 122 92 56;
   --shadow: 4px 4px 0 #3a2a1e;
   --accent: #e38628;
+  --accent-rgb: 227 134 40;
   --ok: #4a9e6b;
+  --ok-rgb: 74 158 107;
   --brand-bg: #e8d5ae;
+  --brand-bg-rgb: 232 213 174;
   --warning: #f59e0b;
+  --warning-rgb: 245 158 11;
   --danger: #dc2626;
+  --danger-rgb: 220 38 38;
 }
 
 body {
   background: var(--brand-bg);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
+}
+
+/* 主题化滚动条：浏览器默认是灰色，与像素暖色主题不符（用户反馈"灰色很浅看不清"）
+   Firefox 用 scrollbar-color，Chromium/WebKit 用 ::-webkit-scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-soft) var(--panel-light);
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--panel-light);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--ink-soft);
+  border: 2px solid var(--panel-light);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink);
 }

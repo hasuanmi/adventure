@@ -68,51 +68,55 @@ export function TwoDayGrid({ days, today, onSelectTask, onSlotClick, onSelectDay
 
   return (
     <div className="border-2 border-ink bg-panel shadow-pixel">
-      {/* 日期 Header：左侧占位 + 两列标题（今天/明天/日期） */}
-      <div className="grid grid-cols-[3.5rem_1fr_1fr] divide-x-2 divide-ink/30 border-b-2 border-ink">
-        <div />
-        {days.map((d) => {
-          const isToday = isSameDay(d.date, today);
-          const isTomorrow = isSameDay(d.date, addDays(today, 1));
-          const title = isToday ? '今天' : isTomorrow ? '明天' : `${d.date.getMonth() + 1}月${d.date.getDate()}日`;
-          const subtitle = isToday || isTomorrow ? dayTitle(d.date) : `周${weekdayCn(d.date)}`;
-          const headerClass = cn(
-            'px-1 py-2 text-center transition-colors',
-            onSelectDay && 'cursor-pointer hover:bg-panelLight active:translate-y-0.5',
-          );
-          const content = (
-            <>
-              <div
-                className="text-xs font-extrabold tracking-widest text-ink"
-                style={{ textShadow: '1px 1px 0 rgba(58,42,30,0.25)' }}
-              >
-                {title}
-              </div>
-              <div className="mt-0.5 text-[11px] font-bold text-inkSoft">{subtitle}</div>
-            </>
-          );
-          // 表头可点：跳到该日日程（原实现是纯 div，点不动）
-          return onSelectDay ? (
-            <button
-              key={d.date.toISOString()}
-              type="button"
-              data-day-header
-              onClick={() => onSelectDay(d.date)}
-              aria-label={`跳到 ${d.date.getMonth() + 1}月${d.date.getDate()}日 日程`}
-              className={headerClass}
-            >
-              {content}
-            </button>
-          ) : (
-            <div key={d.date.toISOString()} data-day-header className={headerClass}>
-              {content}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* 时间轴主体（07:30–21:30） */}
+      {/* 时间轴主体（07:30–21:30）：**表头与表体同处一个滚动容器** →
+          列宽与分格线天然一致（此前表头在外面，表体滚动条占 10px → 分格线差 5px，用户实测反馈）。
+          表头 sticky top-0 保持固定，左侧刻度栏 sticky left-0 保持固定。 */}
       <div className="relative max-h-[62vh] overflow-auto">
+        {/* 日期 Header：与表体同一套结构（w-14 gutter + border-r-2 + grid-cols-2 + divide-x-2） */}
+        <div className="sticky top-0 z-30 flex border-b-2 border-ink bg-panel">
+          <div className="sticky left-0 z-30 w-14 shrink-0 border-r-2 border-ink bg-panel" />
+          <div className="grid flex-1 grid-cols-2 divide-x-2 divide-ink/40">
+            {days.map((d) => {
+              const isToday = isSameDay(d.date, today);
+              const isTomorrow = isSameDay(d.date, addDays(today, 1));
+              const title = isToday ? '今天' : isTomorrow ? '明天' : `${d.date.getMonth() + 1}月${d.date.getDate()}日`;
+              const subtitle = isToday || isTomorrow ? dayTitle(d.date) : `周${weekdayCn(d.date)}`;
+              const headerClass = cn(
+                'px-1 py-2 text-center transition-colors',
+                onSelectDay && 'cursor-pointer hover:bg-panelLight active:translate-y-0.5',
+              );
+              const content = (
+                <>
+                  <div
+                    className="text-xs font-extrabold tracking-widest text-ink"
+                    style={{ textShadow: '1px 1px 0 rgba(58,42,30,0.25)' }}
+                  >
+                    {title}
+                  </div>
+                  <div className="mt-0.5 text-[11px] font-bold text-inkSoft">{subtitle}</div>
+                </>
+              );
+              // 表头可点：跳到该日日程（原实现是纯 div，点不动）
+              return onSelectDay ? (
+                <button
+                  key={d.date.toISOString()}
+                  type="button"
+                  data-day-header
+                  onClick={() => onSelectDay(d.date)}
+                  aria-label={`跳到 ${d.date.getMonth() + 1}月${d.date.getDate()}日 日程`}
+                  className={headerClass}
+                >
+                  {content}
+                </button>
+              ) : (
+                <div key={d.date.toISOString()} data-day-header className={headerClass}>
+                  {content}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="flex">
           {/* 左时间刻度（横向滚动时 sticky） */}
           <div className="sticky left-0 z-20 w-14 shrink-0 border-r-2 border-ink bg-panel">
@@ -120,7 +124,8 @@ export function TwoDayGrid({ days, today, onSelectTask, onSlotClick, onSelectDay
               <div
                 key={l}
                 style={{ height: SCHEDULE_HOUR_PX }}
-                className="border-b-2 border-ink/15 px-1 text-right text-[10px] font-bold text-inkSoft"
+                data-hour-line
+                className="border-b-2 border-ink/30 px-1 text-right text-[10px] font-bold text-inkSoft"
               >
                 {l}
               </div>
@@ -128,7 +133,7 @@ export function TwoDayGrid({ days, today, onSelectTask, onSlotClick, onSelectDay
           </div>
 
           {/* 两列（点击空白时间格 → 创建任务） */}
-          <div className="grid flex-1 grid-cols-2 divide-x-2 divide-ink/30">
+          <div className="grid flex-1 grid-cols-2 divide-x-2 divide-ink/40">
             {days.map((d) => {
               const isToday = isSameDay(d.date, today);
               return (
@@ -138,12 +143,13 @@ export function TwoDayGrid({ days, today, onSelectTask, onSlotClick, onSelectDay
                   onClick={(e) => handleColumnClick(e, d.date)}
                   className={cn('relative', isToday && 'bg-accent/5', onSlotClick && 'cursor-pointer')}
                 >
-                  {/* 小时格线 */}
+                  {/* 小时格线（比背景略深、偏暖；原来 ink/15 太浅看不清） */}
                   {labels.map((l) => (
                     <div
                       key={l}
                       style={{ height: SCHEDULE_HOUR_PX }}
-                      className="border-b-2 border-ink/15"
+                      data-hour-line
+                      className="border-b-2 border-ink/30"
                     />
                   ))}
 
