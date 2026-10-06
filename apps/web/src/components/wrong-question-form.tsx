@@ -75,6 +75,12 @@ export function WrongQuestionForm({ id, prefill, knowledgePoints, imageKey, onSa
     enabled: isEdit,
   });
   const tagsQuery = useQuery({ queryKey: ['knowledge-tags'], queryFn: () => knowledgeTagsApi.list() });
+  /** 标签建议（上游 /api/tags/suggestions）：输入时提示已有标签，减少重复造标签 */
+  const suggestQuery = useQuery({
+    queryKey: ['tag-suggestions', form.subject, newTag.trim()],
+    queryFn: () => knowledgeTagsApi.suggestions({ subject: form.subject ?? undefined, q: newTag.trim() }),
+    enabled: newTag.trim().length > 0,
+  });
 
   // 编辑：载入原值
   useEffect(() => {
@@ -405,6 +411,30 @@ export function WrongQuestionForm({ id, prefill, knowledgePoints, imageKey, onSa
             新建
           </button>
         </div>
+        {/* 标签建议（上游 /api/tags/suggestions）：输入时提示已有标签，避免重复造标签 */}
+        {newTag.trim().length > 0 && (suggestQuery.data ?? []).length > 0 && (
+          <div data-tag-suggestions className="mt-1 flex flex-wrap items-center gap-1">
+            <span className="text-[11px] text-inkSoft">已有标签：</span>
+            {(suggestQuery.data ?? []).slice(0, 6).map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                data-tag-suggestion={s.id}
+                onClick={() => {
+                  setForm((f) => ({
+                    ...f,
+                    tagIds: (f.tagIds ?? []).includes(s.id) ? f.tagIds : [...(f.tagIds ?? []), s.id],
+                  }));
+                  setNewTag('');
+                }}
+                className="border border-ink/40 bg-panelLight px-1.5 py-0.5 text-[11px] text-inkSoft"
+              >
+                {s.name}
+                {s.count > 0 ? ` (${s.count})` : ''}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <label className="block">

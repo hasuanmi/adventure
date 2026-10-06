@@ -1025,3 +1025,57 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 相似题生成（`/api/practice/generate`）、练习记录与练习统计（`/api/practice/record`、`/api/stats/practice*`）、
 标签建议与标签统计（`/api/tags/suggestions`、`/api/tags/stats`）、用户档案（`/api/user` 学段/入学年）、
 打印预览（`print-preview`）、GeoGebra 交互演示（需先确认是否保留该外网 CDN 依赖）。
+
+---
+
+## 29. 打印预览（导出 PDF）+ 相似题练习 + 标签统计/建议（2026-10-06）
+
+用户确认："除了用户档案、GeoGebra 交互演示都可以做"，并指出**导出没接打印**：
+"应该选择导出之后，先进入打印预览，然后可以导出为 pdf"。
+
+### 29.1 导出 → 打印预览 → 另存为 PDF（对照上游 print-preview 页）
+
+- 新增 `/learning/wrong-questions/print`：按**当前筛选**或**勾选的题**渲染打印版式（题干/答案/解析/错因/知识点/年级学期/日期）
+- 「打印 / 保存为 PDF」调 `window.print()`（打印对话框里目标选"另存为 PDF"即导出 PDF）
+- 三个开关：**显示答案 / 显示解析 / 显示错因** —— 家长可以只打题目当练习卷
+- `index.css` 增加 `@page { margin: 12mm }` 与 `@media print`：隐藏表头/底栏/屏幕工具条（`[data-no-print]`），
+  打印区域白底黑字，每题 `break-inside: avoid` 不跨页断裂
+- 列表页按钮语义拆分：**「导出 / 打印」**（进打印预览）与**「备份 JSON」**（原 JSON 下载，导入需要它）
+
+### 29.2 相似题练习（对照上游 practice 页 + `/api/practice/generate|record` + `/api/stats/practice`）
+
+- 后端：`POST /ai/similar`（生成 `<items><item>` 结构化相似题 + 解析器）、
+  新增 practice 模块：`POST /practice/records`、`GET /practice/stats`、`DELETE /practice/stats`（清空）
+- 前端 `/learning/wrong-questions/practice`：选一道错题 → 生成 3/5/10 道相似题 → 「显示答案」→
+  「会了 / 还没会」写入练习记录 → 练习统计（次数/会了/还没会/按难度）
+- 入口放在**详情页「相似题练习」**（保持首页四入口与用户参考图一致，不擅自加第五格）
+- 真机实测：deepseek-flash 生成 **3 道**相似题并可记录 ✓
+
+### 29.3 标签统计 / 标签建议（对照上游 `/api/tags/stats` 与 `/api/tags/suggestions`）
+
+- `GET /knowledge-tags/stats?subject=` 每个标签关联的错题数（排除软删除），按数量倒序
+- `GET /knowledge-tags/suggestions?subject=&q=` 关键词匹配已有标签（无 q 时给用得最多的），
+  表单新建标签时实时提示"已有标签"，减少重复造标签；标签管理页显示每个标签的题目数
+
+### 29.4 验证
+
+`browser-check` 224 → **226 条全绿（95 秒）**，本批关键断言：
+
+| 断言 | 实测 |
+|---|---|
+| 「导出」进入打印预览（不是直接下载） | ✓ pathname 以 /print 结尾 |
+| 打印预览列出错题 + 含打印按钮 + 默认含答案 | questions=2、按钮在、含"10" |
+| 可关闭答案（当练习卷打印） | 勾掉后内容不含"答案：" |
+| 工具条标记 `data-no-print` | ✓ |
+| **Emulation 切 print 媒体**：表头/底栏/工具条隐藏 + 打印区白底 | header/nav/toolbar 全 `display:none`，`rgb(255,255,255)` |
+| AI 生成相似题 | 3 道（真模型） |
+| 练习记录写入统计 + 接口口径 | total/correct ≥ 1 |
+| 标签统计 / 标签建议接口 | ✓ |
+| 「备份 JSON」仍可用 | ✓ |
+
+### 29.5 全清单状态（上游 40 个端点）
+
+已实现：录入/列表/详情/更新/删除/掌握度/笔记/复习、知识点标签 CRUD + 树 + 统计 + 建议、
+AI 识题/重解/相似题、文件上传、批量删除/清空、导入/导出、练习记录与统计、打印预览（导出 PDF）、认证与家庭。
+**未做（用户明确排除）**：用户档案（`/api/user` 学段/入学年）、GeoGebra 交互演示（`/api/geogebra-analyze`、`[id]/geogebra`）。
+管理后台（`/api/admin/*`）、`/api/settings`（明文密钥零认证）、`openclaw/batch-upload` 属**不采用**（见 `docs/p6-fidelity-audit.md` §2）。

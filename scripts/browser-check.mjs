@@ -1938,6 +1938,20 @@ async function main() {
     }
     await cdp.shot('32-knowledge-tags');
 
+    // 标签统计 + 标签建议（上游 /api/tags/stats 与 /api/tags/suggestions）
+    const tagStats = await api('GET', '/knowledge-tags/stats?subject=math', childToken);
+    check(
+      '标签统计接口返回每个标签的错题数',
+      tagStats.status === 200 && Array.isArray(tagStats.json) && tagStats.json.every((t) => typeof t.count === 'number'),
+      true,
+    );
+    const tagSuggest = await api('GET', '/knowledge-tags/suggestions?subject=math&q=勾股', childToken);
+    check(
+      '标签建议接口按关键词返回候选',
+      tagSuggest.status === 200 && Array.isArray(tagSuggest.json),
+      true,
+    );
+
     // 统计中心
     await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions/stats` });
     await cdp.waitFor('[data-stat-total]');

@@ -101,4 +101,19 @@ export const knowledgeTagsApi = {
       body: JSON.stringify(body),
     }),
   remove: (id: string) => request<void>(`/knowledge-tags/${id}`, { method: 'DELETE' }),
+  /** 标签统计（上游 /api/tags/stats） */
+  stats: (subject?: string) =>
+    request<{ id: string; name: string; subject: string; isSystem: boolean; count: number }[]>(
+      `/knowledge-tags/stats${subject ? `?subject=${subject}` : ''}`,
+    ),
+  /** 标签建议（上游 /api/tags/suggestions） */
+  suggestions: (params: { subject?: string; q?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.subject) qs.set('subject', params.subject);
+    if (params.q) qs.set('q', params.q);
+    const query = qs.toString();
+    return request<{ id: string; name: string; count: number }[]>(
+      `/knowledge-tags/suggestions${query ? `?${query}` : ''}`,
+    );
+  },
 };

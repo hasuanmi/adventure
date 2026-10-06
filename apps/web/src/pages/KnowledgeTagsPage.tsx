@@ -19,6 +19,12 @@ export function KnowledgeTagsPage() {
     queryKey: ['knowledge-tags', subject],
     queryFn: () => knowledgeTagsApi.list({ subject }),
   });
+  /** 标签统计（每个标签挂了多少道错题；上游 /api/tags/stats） */
+  const statsQuery = useQuery({
+    queryKey: ['knowledge-tags-stats', subject],
+    queryFn: () => knowledgeTagsApi.stats(subject),
+  });
+  const countOf = (id: string): number => statsQuery.data?.find((s) => s.id === id)?.count ?? 0;
 
   const create = useMutation({
     mutationFn: () => knowledgeTagsApi.create({ name: name.trim(), subject }),
@@ -93,8 +99,13 @@ export function KnowledgeTagsPage() {
             <div className="mt-1.5 flex flex-wrap gap-1" data-system-tags>
               {system.length === 0 && <span className="text-[11px] text-inkSoft">该学科暂无系统标签</span>}
               {system.map((tag) => (
-                <span key={tag.id} className="border-2 border-ink/40 bg-panelLight px-2 py-0.5 text-[11px] font-bold">
+                <span
+                  key={tag.id}
+                  data-tag-count={tag.id}
+                  className="border-2 border-ink/40 bg-panelLight px-2 py-0.5 text-[11px] font-bold"
+                >
                   {tag.name}
+                  {countOf(tag.id) > 0 && <span className="ml-1 text-inkSoft">({countOf(tag.id)})</span>}
                 </span>
               ))}
             </div>
@@ -106,7 +117,12 @@ export function KnowledgeTagsPage() {
               {custom.length === 0 && <span className="text-[11px] text-inkSoft">还没有自定义标签</span>}
               {custom.map((tag) => (
                 <div key={tag.id} className="flex items-center gap-2 border-2 border-ink/40 bg-panelLight px-2 py-1">
-                  <span className="flex-1 text-xs font-bold text-ink">{tag.name}</span>
+                  <span className="flex-1 text-xs font-bold text-ink">
+                    {tag.name}
+                    <span data-tag-count={tag.id} className="ml-1 text-[11px] text-inkSoft">
+                      {countOf(tag.id)} 题
+                    </span>
+                  </span>
                   <button
                     type="button"
                     data-delete-tag={tag.id}

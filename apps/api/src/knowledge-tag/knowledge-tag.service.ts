@@ -95,6 +95,46 @@ export class KnowledgeTagService {
     await this.prisma.knowledgeTag.delete({ where: { id } });
   }
 
+  /** 标签统计（对照上游 GET /api/tags/stats：每个标签关联多少道错题） */
+  async stats(
+    actor: RequestActor,
+    subject?: string,
+  ): Promise<{ id: string; name: string; subject: string; isSystem: boolean; count: number }[]> {
+    const familyId = this.requireFamily(actor);
+    const rows = await this.prisma.knowledgeTag.findMany({
+      where: {
+        familyId,
+        ...(subject ? { subject } : {}),
+        OR: [{ childId: null }, { childId: actor.sub }],
+      },
+      include: { _count: { select: { questions: { where: { deletedAt: null } } } } },
+    });
+    return rows
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        subject: t.subject,
+        isSystem: t.isSystem,
+        count: t._count.questions,
+      }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }
+
+  /**
+   * 标签建议（对照上游 GET /api/tags/suggestions）：
+   * 有 q → 名称包含 q；无 q → 用得最多的前几个（促成复用，避免造重复标签）
+   */
+  async suggestions(
+    actor: RequestActor,
+    params: { subject?: string; q?: string; limit?: number },
+  ): Promise<{ id: string; name: string; count: number }[]> {
+    const all = await this.stats(actor, params.subject);
+    const q = (params.q ?? '').trim().toLowerCase();
+    const limit = Math.min(20, Math.max(1, params.limit ?? 8));
+    const filtered = q ? all.filter((t) => t.name.toLowerCase().includes(q)) : all;
+    return filtered.slice(0, limit).map((t) => ({ id: t.id, name: t.name, count: t.count }));
+  }
+
   private requireFamily(actor: RequestActor): string {
     if (!actor.familyId) {
       throw new BadRequestException({ error: 'bad_request', reason: WRONG_QUESTION_REASON.FAMILY_REQUIRED });

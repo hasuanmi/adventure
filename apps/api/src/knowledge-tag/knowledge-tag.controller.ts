@@ -31,6 +31,24 @@ export class KnowledgeTagController {
     return this.tags.create(actor, dto);
   }
 
+  /** 标签统计（上游 /api/tags/stats） */
+  @Get('stats')
+  async stats(
+    @CurrentUser() actor: RequestActor,
+    @Query() query: ListKnowledgeTagDto,
+  ): Promise<{ id: string; name: string; subject: string; isSystem: boolean; count: number }[]> {
+    return this.tags.stats(actor, query.subject);
+  }
+
+  /** 标签建议（上游 /api/tags/suggestions） */
+  @Get('suggestions')
+  async suggestions(
+    @CurrentUser() actor: RequestActor,
+    @Query() query: ListKnowledgeTagDto & { q?: string },
+  ): Promise<{ id: string; name: string; count: number }[]> {
+    return this.tags.suggestions(actor, { subject: query.subject, q: query.q });
+  }
+
   @Delete(':id')
   @HttpCode(204)
   async remove(@CurrentUser() actor: RequestActor, @Param('id') id: string): Promise<void> {
