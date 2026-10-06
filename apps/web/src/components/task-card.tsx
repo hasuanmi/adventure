@@ -104,13 +104,13 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
   }
 
   return (
-    <Panel className={cn('overflow-hidden', expanded && 'bg-panelLight')}>
+    <Panel className={cn('relative mx-1 overflow-hidden', expanded && 'bg-panelLight')}>
       <button
         type="button"
         data-task-card-toggle
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-2.5 p-2.5 pr-2 text-left transition hover:bg-panelLight"
+        className="flex w-full items-center gap-2.5 p-3 pr-2.5 text-left transition hover:bg-panelLight"
       >
         {/* 图标 tile（44px 见方，对齐 Demo 比例；内嵌 32px 原生图标 → 像素不糊）+ 像素角饰 */}
         <span className="relative grid h-11 w-11 shrink-0 place-items-center border-2 border-ink bg-panelLight shadow-pixel">
@@ -124,7 +124,7 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
             {task.color && (
               <span aria-hidden className="h-3 w-3 shrink-0 border-2 border-ink" style={{ backgroundColor: task.color }} />
             )}
-            <span className="truncate text-[15px] font-extrabold text-ink">{task.title}</span>
+            <span className="truncate text-[15px] font-extrabold text-ink" data-task-title>{task.title}</span>
           </span>
           {/* 两个 chip：状态 + 任务类型（Demo 一致） */}
           <span className="mt-1 flex flex-wrap items-center gap-1">
@@ -143,6 +143,21 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
           )}
         </span>
 
+        {/* 右侧完成小框（参考图排版）：完成后显示勾 */}
+        <span
+          data-task-done-box
+          aria-hidden
+          className={cn(
+            'grid h-7 w-7 shrink-0 place-items-center border-2 border-ink',
+            task.status === 'completed' ? 'bg-ok text-white' : 'bg-panelLight',
+          )}
+        >
+          {task.status === 'completed' && (
+            <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="3">
+              <path d="M3 8.5l3.2 3.2L13 5" strokeLinecap="square" />
+            </svg>
+          )}
+        </span>
         <ChevronDown
           aria-hidden
           className={cn('h-4 w-4 shrink-0 text-inkSoft transition-transform', expanded && 'rotate-180')}
