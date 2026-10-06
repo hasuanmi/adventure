@@ -119,11 +119,11 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
         data-task-card-toggle
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-1.5 px-[5px] py-[5px] text-left transition hover:bg-panelLight"
+        className="flex w-full items-center gap-1 px-[4px] py-[4px] text-left transition hover:bg-panelLight"
       >
         {/* 图标 tile（44px 见方，对齐 Demo 比例；内嵌 32px 原生图标 → 像素不糊）+ 像素角饰 */}
-        <span className="relative grid h-10 w-10 shrink-0 place-items-center border-2 border-ink bg-panelLight shadow-pixel">
-          <img src={taskTileIconUrl(task)} alt="" aria-hidden className="h-7 w-7 [image-rendering:pixelated]" />
+        <span className="relative grid h-9 w-9 shrink-0 place-items-center border-2 border-ink bg-panelLight shadow-pixel">
+          <img src={taskTileIconUrl(task)} alt="" aria-hidden className="h-6 w-6 [image-rendering:pixelated]" />
           <span aria-hidden className="absolute -left-1 -top-1 h-1.5 w-1.5 bg-accent" />
           <span aria-hidden className="absolute -bottom-1 -right-1 h-1.5 w-1.5 bg-accent" />
         </span>
@@ -133,12 +133,12 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
             {task.color && (
               <span aria-hidden className="h-3 w-3 shrink-0 border-2 border-ink" style={{ backgroundColor: task.color }} />
             )}
-            <span className="truncate text-[15px] font-extrabold text-ink" data-task-title>{task.title}</span>
+            <span className="truncate text-[14px] font-extrabold text-ink" data-task-title>{task.title}</span>
           </span>
           {/* 两个 chip：状态 + 任务类型（Demo 一致） */}
           <span className="mt-1 flex flex-wrap items-center gap-1">
             <TaskStatusBadge status={task.status} />
-            <span className="border-2 border-ink bg-panel px-1 py-0.5 text-[11px] font-bold text-ink">
+            <span className="border-2 border-ink bg-panel px-1 py-0.5 text-[10px] font-bold text-ink">
               {taskTypeLabel(task.rewardProfile)}
             </span>
             {task.requiresApproval && (
@@ -148,7 +148,7 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
             )}
           </span>
           {meta.length > 0 && (
-            <span className="mt-0.5 block truncate text-[11px] text-inkSoft">{meta.join(' · ')}</span>
+            <span className="mt-0.5 block truncate text-[10px] text-inkSoft">{meta.join(' · ')}</span>
           )}
         </span>
 
