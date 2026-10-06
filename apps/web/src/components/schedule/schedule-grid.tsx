@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { TaskDto } from '@huahua/shared-types';
 import { assignLanes } from '@huahua/shared-types';
 import { cn } from '../../lib/utils';
@@ -19,7 +19,6 @@ import {
 import { ScheduleChip } from './schedule-chip';
 import { CurrentTimeLine } from './current-time-line';
 
-/** Event 渲染契约（P4 预留：当前无 Event 模型/API，events 为空即不渲染） */
 export interface ScheduleEvent {
   id: string;
   title: string;
@@ -30,48 +29,45 @@ export interface ScheduleEvent {
 
 export interface ScheduleDay {
   date: Date;
-  /** startAt 落在当天的任务（含 completed，完成态划线展示） */
   tasks: TaskDto[];
-  /** P4 Event 预留，默认空数组 */
   events?: ScheduleEvent[];
 }
 
 interface ScheduleGridProps {
-  /** 横向排列的多日（日程页传整周 7 天） */
+  /** 连续多日（范围由页面维护，可无限扩展） */
   days: ScheduleDay[];
-  /** 真实今天（决定「今天/明天」标签与当前时间线） */
   today: Date;
-  /** 需要滚入视野的日期（通常是当前选中日） */
   focusDate?: Date;
   onSelectTask?: (task: TaskDto) => void;
-  /** 点击时间轴空白区 → 创建任务（date + 当天分钟数；点击任务块不触发） */
   onSlotClick?: (date: Date, minute: number) => void;
-  /** 点击列头日期 → 跳到该日日程 */
   onSelectDay?: (date: Date) => void;
-  /** 左右拖动到边缘 → 请求切到上/下一周（-1 = 往前，1 = 往后） */
-  onEdgePan?: (direction: -1 | 1) => void;
+  /**
+   * 拖到接近边缘 → 请求扩展日期范围：
+   *  ``-1`` = 在前面插入 ``extendBy`` 天；``1`` = 在后面追加 ``extendBy`` 天。
+   *  页面扩展后本组件自动补偿 scrollLeft（视觉位置不跳），从而**可以一直往两边拖**。
+   */
+  onExtendRange?: (direction: -1 | 1) => void;
+  /** 每次扩展的天数（必须与页面实际扩展的天数一致） */
+  extendBy?: number;
 }
 
-/** 单日列宽（保证一周 7 列在桌面端也宽于容器，横向拖动才有内容可看） */
-const DAY_COL_PX = 168;
-/** 左侧时间刻度宽 */
+export const DAY_COL_PX = 168;
 const GUTTER_PX = 56;
-/** 拖动判定阈值：超过它才算"拖动"，否则按点击处理 */
 const DRAG_THRESHOLD_PX = 6;
 const HEADER_H = 46;
+/** 距两端多少像素内触发扩展（约 2 列） */
+const EDGE_TRIGGER_PX = DAY_COL_PX * 2;
 
 /**
- * 日程网格（多日横向时间轴）
+ * 日程网格（可**无限**左右拖动的时间轴）
  *
- * 用户要求："日程表左右拖动可以看到其他日期的日程，且上方日历跟着一起动"。
- * 实现要点：
- *  · 表头**单独一行**并 ``sticky top-0``（纵向固定在视口，保住"整页滚动 + 表头常驻"）；
- *    它的横向位移由表体 ``scrollLeft`` 通过 transform 同步 → 拖动时日期一起动；
- *    不把表头塞进横向滚动容器，是因为 ``overflow-x:auto`` 会让 sticky top 相对该容器失效。
- *  · 表体是横向滚动容器（``overflow-x-auto`` + ``overflow-y-clip``）：x 轴自己滚，y 轴交给页面；
- *  · 左侧时间刻度 ``sticky left-0``，横拖时固定不动；
- *  · 鼠标/触屏**按住左右拖动**即可平移（超过阈值才算拖动，避免误吞点击）；
- *  · 拖到两端继续拖 → 通过 ``onEdgePan`` 切上一周/下一周，实现连续浏览。
+ * 针对用户反馈"划动有延迟 / 只能拖一周"的设计：
+ *  · 无限拖动：日期范围由页面维护，拖到距边缘 2 列时请求扩展；扩展后在 layoutEffect 里补偿
+ *    scrollLeft（前面插入 N 天就补 N×列宽），位置不跳 → 可以一直往两边拖。
+ *  · 不卡顿：表头位移**直接写 DOM**（不走 state）；并且
+ *    - 鼠标：自己写 scrollLeft（瞬时）；
+ *    - 触屏/笔：**交给浏览器原生滚动**（只同步表头），避免"手动写 + 原生滚动"互相打架造成卡顿。
+ *  · 表头独立一行 ``sticky top-0``（纵向常驻），横向随表体位移；左时间刻度 ``sticky left-0``。
  */
 export function ScheduleGrid({
   days,
@@ -80,21 +76,37 @@ export function ScheduleGrid({
   onSelectTask,
   onSlotClick,
   onSelectDay,
-  onEdgePan,
+  onExtendRange,
+  extendBy = 14,
 }: ScheduleGridProps) {
   const labels = hourLabels();
   const scroller = useRef<HTMLDivElement>(null);
   const headerRow = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ startX: number; startLeft: number; moved: boolean } | null>(null);
+  const drag = useRef<{ startX: number; startLeft: number; moved: boolean; pointerType: string } | null>(null);
   const suppressClick = useRef(false);
+  /** 已请求扩展（等 days 变化后补偿并复位），避免重复请求 */
+  const pendingExtend = useRef<-1 | 1 | null>(null);
+  const lastDayCount = useRef(days.length);
 
-  /**
-   * 表头横向位移：**直接写 DOM，不走 React state**。
-   * 之前用 state 驱动 → 拖动时表头比表体晚一帧渲染，用户看到"第一列表头和下方不同步"。
-   */
   const syncHeader = (left: number): void => {
     if (headerRow.current) headerRow.current.style.transform = `translateX(${-left}px)`;
   };
+
+  // 范围变化后的补偿：前面插入了 N 天 → scrollLeft 前移 N×列宽（视觉位置保持不变）
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const delta = days.length - lastDayCount.current;
+    if (delta > 0 && pendingExtend.current === -1) {
+      el.scrollLeft += extendBy * DAY_COL_PX;
+      syncHeader(el.scrollLeft);
+    }
+    if (delta !== 0) {
+      lastDayCount.current = days.length;
+      pendingExtend.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days.length]);
 
   // 选中日滚入视野
   useEffect(() => {
@@ -106,7 +118,19 @@ export function ScheduleGrid({
     el.scrollLeft = next;
     syncHeader(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusDate?.toDateString(), days.length]);
+  }, [focusDate?.toDateString()]);
+
+  function maybeExtend(el: HTMLDivElement): void {
+    if (!onExtendRange || pendingExtend.current) return;
+    const max = el.scrollWidth - el.clientWidth;
+    if (el.scrollLeft < EDGE_TRIGGER_PX) {
+      pendingExtend.current = -1;
+      onExtendRange(-1);
+    } else if (el.scrollLeft > max - EDGE_TRIGGER_PX) {
+      pendingExtend.current = 1;
+      onExtendRange(1);
+    }
+  }
 
   function handleColumnClick(e: React.MouseEvent<HTMLDivElement>, d: Date) {
     if (!onSlotClick) return;
@@ -124,7 +148,7 @@ export function ScheduleGrid({
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     const el = scroller.current;
     if (!el) return;
-    drag.current = { startX: e.clientX, startLeft: el.scrollLeft, moved: false };
+    drag.current = { startX: e.clientX, startLeft: el.scrollLeft, moved: false, pointerType: e.pointerType };
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
@@ -135,19 +159,14 @@ export function ScheduleGrid({
     if (!d.moved && Math.abs(dx) < DRAG_THRESHOLD_PX) return;
     if (!d.moved) {
       d.moved = true;
-      el.setPointerCapture?.(e.pointerId);
+      if (d.pointerType === 'mouse') el.setPointerCapture?.(e.pointerId);
     }
-    const max = el.scrollWidth - el.clientWidth;
-    // 拖到边缘还要继续拖 → 切换相邻周（连续浏览）
-    if (onEdgePan && ((el.scrollLeft <= 0 && dx > 60) || (el.scrollLeft >= max - 1 && dx < -60))) {
-      drag.current = null;
+    if (d.pointerType === 'mouse') {
+      el.scrollLeft = d.startLeft - dx;
+      syncHeader(el.scrollLeft);
       suppressClick.current = true;
-      onEdgePan(dx > 0 ? -1 : 1);
-      return;
+      maybeExtend(el);
     }
-    el.scrollLeft = d.startLeft - dx;
-    syncHeader(el.scrollLeft);
-    suppressClick.current = true;
   }
 
   function endDrag() {
@@ -158,7 +177,7 @@ export function ScheduleGrid({
 
   return (
     <div className="border-2 border-ink bg-panel shadow-pixel">
-      {/* 表头行：纵向 sticky；横向位移与表体同步 */}
+      {/* 表头行：纵向 sticky；横向与表体同步（直接写 DOM，无渲染延迟） */}
       <div className="sticky top-0 z-30 flex border-b-2 border-ink bg-panel">
         <div className="shrink-0 border-r-2 border-ink bg-panel" style={{ width: GUTTER_PX, height: HEADER_H }} />
         <div className="min-w-0 flex-1 overflow-hidden">
@@ -171,17 +190,18 @@ export function ScheduleGrid({
             {days.map((d) => {
               const isToday = isSameDay(d.date, today);
               const isTomorrow = isSameDay(d.date, addDays(today, 1));
-              // 表头结构对**所有日期完全一致**：第一行 = M月D日，第二行 = 周X（今天/明天加标记）
+              // 结构对所有日期一致：第一行 = M月D日，第二行 = 周X（今天/明天加标记）
               const title = `${d.date.getMonth() + 1}月${d.date.getDate()}日`;
               const weekday = `周${weekdayCn(d.date)}`;
               const subtitle = isToday ? `今天 · ${weekday}` : isTomorrow ? `明天 · ${weekday}` : weekday;
+              const headerClass = cn(
+                'shrink-0 border-r-2 border-ink/40 px-1 py-2 text-center',
+                isToday && 'bg-accent/10',
+              );
               const content = (
                 <>
                   <div
-                    className={cn(
-                      'text-xs font-extrabold tracking-widest',
-                      isToday ? 'text-accent' : 'text-ink',
-                    )}
+                    className={cn('text-xs font-extrabold tracking-widest', isToday ? 'text-accent' : 'text-ink')}
                     style={{ textShadow: '1px 1px 0 rgba(58,42,30,0.25)' }}
                   >
                     {title}
@@ -190,10 +210,6 @@ export function ScheduleGrid({
                     {subtitle}
                   </div>
                 </>
-              );
-              const headerClass = cn(
-                'shrink-0 border-r-2 border-ink/40 px-1 py-2 text-center',
-                isToday && 'bg-accent/10',
               );
               return onSelectDay ? (
                 <button
@@ -222,17 +238,20 @@ export function ScheduleGrid({
         </div>
       </div>
 
-      {/* 表体：横向滚动（y 轴交给页面） */}
+      {/* 表体：横向滚动容器（y 交给页面） */}
       <div
         ref={scroller}
         data-schedule-scroll
-        onScroll={(e) => syncHeader((e.target as HTMLDivElement).scrollLeft)}
+        onScroll={(e) => {
+          const el = e.target as HTMLDivElement;
+          syncHeader(el.scrollLeft);
+          maybeExtend(el);
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         onPointerLeave={endDrag}
-        // 拖动后吞掉随之而来的 click，避免"拖完顺手新建了任务"
         onClickCapture={(e) => {
           if (suppressClick.current) {
             suppressClick.current = false;
@@ -240,9 +259,9 @@ export function ScheduleGrid({
             e.preventDefault();
           }
         }}
-        className="relative flex cursor-grab select-none overflow-x-auto overflow-y-clip active:cursor-grabbing [touch-action:pan-x]"
+        className="relative flex cursor-grab select-none overflow-x-auto overflow-y-clip overscroll-x-contain active:cursor-grabbing [touch-action:pan-x]"
       >
-        {/* 左时间刻度（横拖时固定在左侧） */}
+        {/* 左时间刻度（横拖时固定） */}
         <div className="sticky left-0 z-20 shrink-0 border-r-2 border-ink bg-panel" style={{ width: GUTTER_PX }}>
           {labels.map((l) => (
             <div
@@ -271,6 +290,7 @@ export function ScheduleGrid({
             <div
               key={d.date.toISOString()}
               data-day-col
+              data-day-iso={d.date.toISOString().slice(0, 10)}
               style={{ width: DAY_COL_PX }}
               className={cn('shrink-0 border-r-2 border-ink/40 bg-panel', isToday && 'bg-accent/5')}
             >
@@ -329,7 +349,7 @@ export function ScheduleGrid({
                   );
                 })}
 
-                {d.events?.map((e) => {
+                {(d.events ?? []).map((e) => {
                   const start = parseIso(e.startAt);
                   const end = parseIso(e.endAt);
                   const height = Math.max(

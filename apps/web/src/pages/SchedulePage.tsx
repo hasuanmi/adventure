@@ -13,7 +13,6 @@ import {
   dateAtMinute,
   taskAppliesToDay,
   toLocalInputValue,
-  weekDays7,
 } from '../lib/schedule';
 
 // 日程页（docs/task-create-and-schedule-review.md §7）
@@ -26,6 +25,12 @@ export function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [createOpen, setCreateOpen] = useState(false);
   const [slotStartAt, setSlotStartAt] = useState<string | undefined>(undefined);
+  // 连续日期范围（默认选中日往前 7 天起、共 28 天）；拖到边缘按 EXTEND_DAYS 扩展 → 可无限左右拖
+  // 注意：必须在任何 early return **之前**声明，否则 hook 数量在渲染间变化会直接报错
+  const EXTEND_DAYS = 14;
+  const RANGE_DAYS = 28;
+  const [rangeStart, setRangeStart] = useState(() => addDays(new Date(), -7));
+  const [rangeDays, setRangeDays] = useState(RANGE_DAYS);
 
   const today = new Date();
 
@@ -57,11 +62,29 @@ export function SchedulePage() {
   const tasks = tasksQuery.data ?? [];
   // 投影：startAt 落在当天，或周重复（repeatWeekdays）命中当天且 >= startAt 日期
   const byDay = (d: Date) => tasks.filter((t) => taskAppliesToDay(t, d));
-  // 一周 7 天（周一起）：横向拖动可看到其他日期的日程（用户要求）
-  const weekDates = weekDays7(selectedDate);
+  const rangeDates = Array.from({ length: rangeDays }, (_, i) => addDays(rangeStart, i));
   // 未安排 N：startAt = null 且未完成（真实 API 数据计算，不 mock）
   const unScheduled = tasks.filter((t) => !t.startAt && t.status !== 'completed').length;
-  const hasPlan = weekDates.some((d) => byDay(d).length > 0);
+  const hasPlan = rangeDates.some((d) => byDay(d).length > 0);
+
+  /** 扩展范围：-1 往过去插、1 往未来加（grid 会补偿 scrollLeft，位置不跳） */
+  function extendRange(direction: -1 | 1) {
+    if (direction === -1) {
+      setRangeStart((prev) => addDays(prev, -EXTEND_DAYS));
+      setRangeDays((n) => n + EXTEND_DAYS);
+    } else {
+      setRangeDays((n) => n + EXTEND_DAYS);
+    }
+  }
+
+  /** 选中日不在当前范围内时，把范围重新围绕它铺开（并保持聚焦） */
+  function ensureRangeContains(date: Date) {
+    const offset = Math.floor((date.getTime() - rangeStart.getTime()) / 86400000);
+    if (offset < 0 || offset >= rangeDays) {
+      setRangeStart(addDays(date, -7));
+      setRangeDays(Math.max(RANGE_DAYS, rangeDays));
+    }
+  }
 
   function openCreate(startAt?: string) {
     setSlotStartAt(startAt);
@@ -85,19 +108,23 @@ export function SchedulePage() {
       <ScheduleGrid
         today={today}
         focusDate={selectedDate}
-        days={weekDates.map((d) => ({ date: d, tasks: byDay(d) }))}
+        days={rangeDates.map((d) => ({ date: d, tasks: byDay(d) }))}
         onSelectTask={(t) => navigate(`/tasks/${t.id}`)}
         onSlotClick={(d, minute) => openCreate(toLocalInputValue(dateAtMinute(d, minute)))}
-        onSelectDay={(d) => setSelectedDate(d)}
-        // 拖到边缘继续拖 → 切上/下一周（连续左右浏览）
-        onEdgePan={(direction) => setSelectedDate(addDays(selectedDate, direction * 7))}
+        onSelectDay={(d) => {
+          setSelectedDate(d);
+          ensureRangeContains(d);
+        }}
+        // 拖到边缘 → 扩展日期范围（grid 会补偿滚动位置）→ 可无限左右拖
+        onExtendRange={extendRange}
+        extendBy={EXTEND_DAYS}
       />
 
       {!hasPlan && (
         <Panel>
           <Empty
             icon="🗓️"
-            title="这周暂无安排"
+            title="这段时间暂无安排"
             description="去「今日」创建任务，或点击上方「＋ 新建任务」并设置开始时间"
           />
         </Panel>
