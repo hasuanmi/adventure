@@ -297,3 +297,29 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 1. 任务卡默认收起 → 点击展开（`aria-expanded`）、面板含「进度（按状态）」「完成标准」且完成标准取到 `description`、含「查看详情」「编辑」；
 2. 切换为孩子账号后行内操作**真实改状态**：点「▶ 开始」→ 状态徽章变"进行中"、进度变 50%、出现「✓ 完成」；点「✓ 完成」（该任务需审批）→ 提示"已提交，等待家长确认"且状态仍为进行中；再点一次 → 给出友好提示而非崩溃；
 3. 孩子侧「本周打卡」渲染 7 格、初始 0/7（新账号无流水）。
+
+---
+
+## 13. P2 剩余 UI 实施（2026-10-06）：表头头像 + 等级经验栏 → 成长页
+
+用户决策（明确否决了原方案）：**成长页不占底部导航**，改为「点击左上角」进入；同时把表头标题
+「话话成长 · 学习冒险岛」替换为**小女孩头像 + 等级经验栏**。底部导航保持 2 格（今日｜日程）。
+
+| 文件 | 变更 |
+|---|---|
+| `apps/web/src/components/layout/app-layout.tsx` | 表头左半部 = `Link[data-growth-entry]`（头像 + `Lv.N` 徽章 + 等级内 XP 进度条 + `当前/所需 XP` + 日期与累计 XP）；数据来自 `GET /growth/me`（`levelProgressFromXp` 派生等级，与成长页共用 queryKey 缓存）。右侧角色徽章/家庭/退出不变 |
+| `apps/web/src/pages/GrowthPage.tsx` | **新增**：等级卡（大头像 + Lv + XP 进度 + 累计 XP + 金币）、六维成长（6 条：标签 + Lv + 点数 + 距下一级 + PixelBar，用新增纯函数 `dimensionProgressFromPoints`）、本周打卡（复用组件）、奖励记录（`GET /growth/grants` 最近 20 条：时间 + XP + 金币；空态） |
+| `apps/web/src/App.tsx` | 新增路由 `/growth`（`withLayout` → 需登录） |
+| `apps/web/public/avatar-girl.png`、`avatar-girl-16.png` | **自研像素头像**：16×16 手写像素图 → `×8` NEAREST 输出 128×128（外加原生 16×16）；生成脚本 `visualasset/build_avatar.py`（与既有 `build_icons.py` 同一套路，可复现/可改色） |
+
+### 13.1 头像素材来源（如实记录）
+
+| 项 | 结论 |
+|---|---|
+| `visualasset/kenney_tiny-farm`（Kenney，CC0） | 包内 **无小女孩角色**：12×11 tile 网格中角色只有 r9c0 男孩与 r9c1 宽檐帽农夫（已逐格切片核对） |
+| 内部生图模型 | 调用失败：`402 Upstream image account has insufficient balance`（余额不足），本轮**不可用** |
+| 最终方案 | **脚本化自研**（`visualasset/build_avatar.py`）：16×16 像素图（棕发 + 红蝴蝶结 + 蓝背带裤 + 白领口），`×8` NEAREST 放大。无第三方素材依赖，无需额外许可；已在 `docs/opensource-mapping.md` §二点十一 登记 |
+
+**验证**：`browser-check` 断言 **40 条全绿（20 秒）**，本轮新增 9 条：
+表头含等级徽章 / 含 XP 进度 / **头像文件真能加载（`naturalWidth > 0`，可捕获 public 资源缺失）** /
+底部导航仍为 2 格 / 点击表头进入 `/growth` / 成长页含六维全部标签 / 含金币 / 含奖励记录区 / 含本周打卡。

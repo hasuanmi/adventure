@@ -1,8 +1,11 @@
 import { CalendarDays, Home, LogOut, Users } from 'lucide-react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { levelProgressFromXp } from '@huahua/shared-types';
 import { cn } from '../../lib/utils';
 import { useUser } from '../../hooks/use-user';
 import { authApi } from '../../lib/api/auth';
+import { growthApi } from '../../lib/api/growth';
 import { clearSession } from '../../store/auth';
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
@@ -12,6 +15,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const now = new Date();
   const dateLabel = `${now.getMonth() + 1}月${now.getDate()}日 周${WEEK[now.getDay()]}`;
+  // 左上角成长入口的数据（等级由 xp 派生；与成长页共用 queryKey 缓存）
+  const growthQuery = useQuery({
+    queryKey: ['growth', 'me'],
+    queryFn: () => growthApi.me(),
+    enabled: Boolean(user),
+  });
+  const xp = growthQuery.data?.xp ?? 0;
+  const xpProgress = growthQuery.data ? levelProgressFromXp(growthQuery.data.xp) : null;
 
   // 底栏 2 格：今日 | 日程（docs/p2-ui-ux-review.md §3：任务并入今日；成长等后续阶段再加入）
   const nav = [
@@ -31,14 +42,45 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-brandBg text-ink">
       {/* HUD 顶部（docs/ui-reference.md §2） */}
       <header className="border-b-4 border-ink bg-ink text-panelLight">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <div>
-            <h1 className="text-lg font-extrabold tracking-widest" style={{ textShadow: '2px 2px 0 #2c2015' }}>
-              话话成长 · 学习冒险岛
-            </h1>
-            <p className="text-xs text-panelLight/80">{dateLabel}</p>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
+          {/* 左上角：小女孩头像 + 等级经验栏 → 点击进成长页（用户要求：不用底部导航放成长） */}
+          <Link
+            to="/growth"
+            data-growth-entry
+            aria-label="我的成长"
+            title="我的成长"
+            className="flex min-w-0 items-center gap-2 transition active:translate-y-0.5"
+          >
+            <img
+              src="/avatar-girl.png"
+              alt=""
+              aria-hidden
+              className="h-11 w-11 shrink-0 border-2 border-panel/60 bg-panelLight [image-rendering:pixelated]"
+            />
+            <span className="min-w-0">
+              <span className="flex items-center gap-1.5">
+                <span className="border-2 border-panel/40 bg-panel/10 px-1.5 py-0.5 text-[11px] font-extrabold">
+                  {xpProgress ? `Lv.${xpProgress.level}` : 'Lv.—'}
+                </span>
+                <span className="text-[11px] text-panelLight/85">
+                  {xpProgress ? `${xpProgress.current}/${xpProgress.needed} XP` : '—'}
+                </span>
+              </span>
+              <span className="mt-1 block h-2 w-28 border border-panel/50 bg-panel/20">
+                <span
+                  className="block h-full transition-all"
+                  style={{
+                    width: `${Math.round((xpProgress?.ratio ?? 0) * 100)}%`,
+                    background: 'var(--ok)',
+                  }}
+                />
+              </span>
+              <span className="mt-0.5 block text-[10px] text-panelLight/70">
+                {dateLabel} · 累计 {xp} XP
+              </span>
+            </span>
+          </Link>
+          <div className="flex shrink-0 items-center gap-2 text-xs">
             {user ? (
               <>
                 <span className="border-2 border-panel/40 bg-panel/10 px-2 py-1">

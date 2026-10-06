@@ -243,6 +243,28 @@ model Task {
 
 ---
 
+## 二点十一、P2 剩余 UI 与素材来源（2026-10-06）
+
+**功能（全部 C 自研，延续 §二点七 第 9/11 项"无开源参考"结论）**：
+
+| 能力 | 参考来源 | 结论 |
+|---|---|---|
+| TaskCard → 可展开任务面板（进度/完成标准/行内操作/像素角饰） | 无（review 文档 §9 要求对齐自有 Demo） | 自研：`apps/web/src/components/task-card.tsx`；进度=状态派生、完成标准=`description`（详见 `p2-closure-record.md` §12） |
+| 本周打卡（像素格） | 无 | 自研：`apps/web/src/components/week-checkin.tsx`；数据=`/growth/grants` 派生，无新模型 |
+| 成长页（等级/六维/金币/流水）+ 表头等级经验栏 | 无（§二点七 第 9/11 项已核验 6 个参考项目均无成长页） | 自研：`apps/web/src/pages/GrowthPage.tsx`、`app-layout.tsx`；入口在表头左上角（用户决策，不占底部导航） |
+
+**素材（新增登记，避免未登记资产）**：
+
+| 素材 | 位置 | 许可 | 当前是否使用 | 说明 |
+|---|---|---|---|---|
+| 像素头像（小女孩，16×16 → 128px） | `apps/web/public/avatar-girl.png`、`avatar-girl-16.png` | **本项目自研**（脚本生成，无第三方素材） | ✅ 已用（表头 + 成长页） | 生成脚本 `visualasset/build_avatar.py`（与 `build_icons.py` 同一套路，可复现/改色）。**背景**：先查 `visualasset/` 现成素材——Kenney Tiny Farm 内无女孩角色；内部生图模型返回 `402 insufficient balance`，故改为脚本化绘制 |
+| Kenney Tiny Farm（像素农场 tile 集） | `visualasset/kenney_tiny-farm/` | **CC0 1.0**（包内 `License.txt`；预览图标注 CC0，无需署名、可商用） | ⬜ **暂未使用** | 用户加入的素材；本轮逐格切片核对：角色仅 r9c0 男孩 / r9c1 农夫。后续若要用于任务卡角饰/空态插画，需在本表补登具体用途 |
+| 任务类型图标 ×5（日常/冒险/世界/自然/悬赏） | `visualasset/quest_icons/` | **本项目自研**（`build_icons.py` 生成，含 light/dark 预览与 32px 原生尺寸） | ⬜ **暂未使用** | 可作 P4/P5 任务类型或成就图标；接入时在本表补登 |
+
+> 纪律：**未使用的素材也登记**（来源、许可、是否已落地），避免日后出现"仓库里有一堆来源不明的图"。
+
+---
+
 ## 三、落地流程（每个模块开发时的执行清单）
 
 1. 定位源码：按本表"源码位置"读取对应文件，核对能力实现。

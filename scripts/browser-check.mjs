@@ -550,6 +550,35 @@ async function main() {
     await sleep(1500);
     const afterDuplicate = await cdp.cardText(taskTitle);
     check('重复提交给出友好提示（未崩溃）', String(afterDuplicate).includes('已提交过') || String(afterDuplicate).includes('等待家长确认'), true);
+
+    // ---------- 8. 表头成长入口（小女孩头像 + 等级经验栏）→ 成长页 ----------
+    await cdp.send('Page.navigate', { url: `${BASE}/` });
+    await cdp.waitFor('[data-growth-entry]');
+    const headerText = await cdp.evaluate(
+      `document.querySelector('[data-growth-entry]').innerText.replace(/\\n/g, ' ')`,
+    );
+    check('表头含等级徽章', /Lv\.\d+/.test(String(headerText)), true);
+    check('表头含 XP 进度', String(headerText).includes('XP'), true);
+    const avatarWidth = await cdp.evaluate(
+      `(() => { const i = document.querySelector('[data-growth-entry] img'); return i ? i.naturalWidth : 0; })()`,
+    );
+    check('表头头像可加载（/avatar-girl.png 存在且可访问）', Number(avatarWidth) > 0, true);
+    check('底部导航仍为 2 格（成长不占导航）', await cdp.evaluate(`document.querySelectorAll('nav a').length`), 2);
+    await cdp.shot('10-header-growth-entry');
+
+    await cdp.clickSelector('[data-growth-entry]');
+    await sleep(1200);
+    check('点击表头进入成长页', await cdp.evaluate('location.pathname'), '/growth');
+    const growthText = String(await cdp.evaluate('document.body.innerText'));
+    check(
+      '成长页含六维全部标签',
+      ['智识', '逻辑', '表达', '探索', '羁绊', '体魄'].every((l) => growthText.includes(l)),
+      true,
+    );
+    check('成长页含金币', growthText.includes('金币'), true);
+    check('成长页含奖励记录区', growthText.includes('奖励记录'), true);
+    check('成长页含本周打卡', growthText.includes('本周打卡'), true);
+    await cdp.shot('11-growth-page');
   } finally {
     clearTimeout(watchdog);
     try {
