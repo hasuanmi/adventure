@@ -73,6 +73,9 @@ model Task {
   estimatedMinutes Int?      @map("estimated_minutes") @db.SmallInt
   // 8 预设色之一（huahuastudy 色板；日程/卡片用色）
   color            String?   @db.VarChar(16)
+  // 任务图标 key（shared-types TASK_ICON_KEYS 白名单；NULL = 用中性默认图标）
+  // 展示层字段：仅决定卡片/详情左上角那枚像素图标，不参与任何业务规则
+  icon             String?   @db.VarChar(32)
   // 重复：位掩码 bit0=周一 … bit6=周日；0/空 = 不重复（仅日程展示层展开）
   repeatWeekdays   Int?      @map("repeat_weekdays") @db.SmallInt
   // 需人工确认时：任务创建人指定审核人（v1.2 §18#2：仅该审核人可审批）

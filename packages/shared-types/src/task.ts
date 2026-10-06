@@ -28,6 +28,8 @@ export interface TaskDto {
   estimatedMinutes?: number | null;
   /** 8 预设色之一（huahuastudy 色板；日程/卡片用色） */
   color?: string | null;
+  /** 任务图标 key（TASK_ICON_KEYS 白名单；NULL = 中性默认图标）。纯展示层字段 */
+  icon?: string | null;
   /** 重复：位掩码 bit0=周一 … bit6=周日；0/空 = 不重复（仅日程展示层展开） */
   repeatWeekdays?: number | null;
   requiresApproval: boolean;
@@ -51,6 +53,8 @@ export interface CreateTaskRequest {
   dueDate?: string;
   estimatedMinutes?: number;
   color?: string;
+  /** 任务图标 key（可选；白名单校验，缺省 = 中性默认图标） */
+  icon?: string;
   repeatWeekdays?: number;
   /** 需人工确认时必填：任务创建人指定的审核人 */
   requiresApproval?: boolean;
@@ -69,6 +73,7 @@ export interface UpdateTaskRequest {
   dueDate?: string;
   estimatedMinutes?: number | null;
   color?: string | null;
+  icon?: string | null;
   repeatWeekdays?: number | null;
   requiresApproval?: boolean;
   reviewerId?: string;

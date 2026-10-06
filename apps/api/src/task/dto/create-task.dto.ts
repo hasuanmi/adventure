@@ -1,5 +1,5 @@
 import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
-import { CreateTaskRequest, REWARD_PROFILE_CODES } from '@huahua/shared-types';
+import { CreateTaskRequest, REWARD_PROFILE_CODES, TASK_ICON_KEYS } from '@huahua/shared-types';
 
 export class CreateTaskDto implements CreateTaskRequest {
   @IsOptional()
@@ -49,6 +49,11 @@ export class CreateTaskDto implements CreateTaskRequest {
   @IsString()
   @MaxLength(16)
   color?: string;
+
+  /** 任务图标 key 白名单（展示层；缺省 = 中性默认图标） */
+  @IsOptional()
+  @IsIn(TASK_ICON_KEYS)
+  icon?: string;
 
   @IsOptional()
   @IsInt()

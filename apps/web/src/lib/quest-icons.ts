@@ -1,23 +1,29 @@
 import type { RewardProfileCategory } from '@huahua/shared-types';
+import { TASK_ICON_FALLBACK, TASK_ICON_KEYS } from './task-icons';
 
-// 任务类型图标（visualasset/quest_icons 自研 32×32 像素图，登记见 docs/opensource-mapping.md §二点十一）
-// 映射依据（quest_icons/README.md 的五类语义 ↔ 本项目奖励档分类）：
-//   日常任务(daily)   : 每天要完成的学习与日常          → 奖励档 daily
-//   世界任务(world)   : 阶段性重要目标与世界事件        → 奖励档 world
-//   风物任务(nature)  : 户外活动、生活体验、观察自然    → 奖励档 scenery（风物）
-//   悬赏任务(bounty)  : 临时发布、限时完成的特别任务    → 奖励档 custom（含未设置档位）
-//   冒险任务(adventure): 长期成长、旅程与目标           → 无对应档位，用于「今日冒险」HUD 等装饰位
-const BASE = '/quest';
+// 任务图标 / 任务类型的展示映射（对齐旧项目 Demo proto-kid-v2）：
+//   · 卡片左上角 = 一枚 32×32 像素图标（**可由用户自选**；未选时退回类型图标，再退回中性图标）
+//   · 卡片第二个 chip = **任务类型**（日常任务/世界任务/风物任务/悬赏任务/未分类）
+// 素材与映射登记见 docs/opensource-mapping.md §二点十一，实施记录见 docs/p2-closure-record.md §14/§15。
 
-export const QUEST_ICON_BY_CATEGORY: Record<RewardProfileCategory, string> = {
-  daily: `${BASE}/01_daily.png`,
-  world: `${BASE}/03_world.png`,
-  scenery: `${BASE}/04_nature.png`,
-  custom: `${BASE}/05_bounty.png`,
+/** 奖励档分类 → 任务类型图标 key（图标库前 5 枚即 quest_icons 自研图标） */
+const ICON_KEY_BY_CATEGORY: Record<RewardProfileCategory, string> = {
+  daily: 'daily',
+  world: 'world',
+  scenery: 'nature',
+  custom: 'bounty',
 };
 
-/** 「冒险」图标：无对应奖励档，用于 HUD「今日冒险」等装饰位 */
-export const QUEST_ICON_ADVENTURE = `${BASE}/02_adventure.png`;
+/** 奖励档分类 → 类型文案（Demo 的第二个 chip） */
+const TYPE_LABEL_BY_CATEGORY: Record<RewardProfileCategory, string> = {
+  daily: '日常任务',
+  world: '世界任务',
+  scenery: '风物任务',
+  custom: '悬赏任务',
+};
+
+/** 未设置奖励档（NULL）在 Demo 里显示为「未分类」 */
+export const TASK_TYPE_UNCLASSIFIED = '未分类';
 
 /**
  * 由奖励档 code 推断分类：code 前缀即分类（DAILY_/WORLD_/SCENERY_），其余（CUSTOM/未知）归 custom。
@@ -28,7 +34,28 @@ export function categoryFromRewardProfileCode(code?: string | null): RewardProfi
   return prefix === 'daily' || prefix === 'world' || prefix === 'scenery' ? prefix : 'custom';
 }
 
-/** 任务卡/详情用的类型图标 */
-export function questIconForRewardProfile(code?: string | null): string {
-  return QUEST_ICON_BY_CATEGORY[categoryFromRewardProfileCode(code)];
+/** 任务类型文案；未设置奖励档 → 「未分类」 */
+export function taskTypeLabel(rewardProfile?: string | null): string {
+  if (!rewardProfile) return TASK_TYPE_UNCLASSIFIED;
+  return TYPE_LABEL_BY_CATEGORY[categoryFromRewardProfileCode(rewardProfile)];
+}
+
+/** 任务卡左上角图标 URL：自选图标 > 类型图标 > 中性图标 */
+export function taskTileIconUrl(task: { icon?: string | null; rewardProfile?: string | null }): string {
+  if (task.icon && TASK_ICON_KEYS.includes(task.icon)) return `/icons/${task.icon}.png`;
+  if (task.rewardProfile) return `/icons/${ICON_KEY_BY_CATEGORY[categoryFromRewardProfileCode(task.rewardProfile)]}.png`;
+  return `/icons/${TASK_ICON_FALLBACK}.png`;
+}
+
+/** 「冒险」图标（HUD「今日冒险」装饰位）：图标库的 adventure */
+export const TASK_ICON_ADVENTURE_URL = '/icons/adventure.png';
+
+/** 奖励档分组标签用的类型图标（创建页下拉） */
+export function categoryIconUrl(category: RewardProfileCategory): string {
+  return `/icons/${ICON_KEY_BY_CATEGORY[category]}.png`;
+}
+
+/** 选中某奖励档时，触发器里显示的图标 */
+export function rewardProfileIconUrl(code?: string | null): string {
+  return categoryIconUrl(categoryFromRewardProfileCode(code));
 }

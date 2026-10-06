@@ -1,0 +1,40 @@
+// 任务图标 key 白名单（**由 visualasset/build_icon_library.py 生成，请勿手改**）
+// 契约层只放 key（稳定的枚举语义）；中文标签等 UI 文案在 apps/web 的 task-icons.ts。
+
+export const TASK_ICON_KEYS = [
+  'daily',
+  'adventure',
+  'world',
+  'nature',
+  'bounty',
+  'plant',
+  'tree',
+  'flower',
+  'mushroom',
+  'wheat',
+  'tomato',
+  'cabbage',
+  'berry',
+  'stone',
+  'hammer',
+  'axe',
+  'chest',
+  'barrel',
+  'bag',
+  'table',
+  'bed',
+  'sheep',
+  'cow',
+  'chicken',
+  'mailbox',
+  'well',
+  'bread',
+  'gear',
+  'robot',
+  'crate',
+  'screen',
+  'spring',
+  'machine',
+] as const;
+
+export type TaskIconKey = (typeof TASK_ICON_KEYS)[number];

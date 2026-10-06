@@ -258,8 +258,10 @@ model Task {
 | 素材 | 位置 | 许可 | 当前是否使用 | 说明 |
 |---|---|---|---|---|
 | 像素头像（小女孩，16×16 → 128px） | `apps/web/public/avatar-girl.png`、`avatar-girl-16.png` | **本项目自研**（脚本生成，无第三方素材） | ✅ 已用（表头 + 成长页） | 生成脚本 `visualasset/build_avatar.py`（与 `build_icons.py` 同一套路，可复现/改色）。**背景**：先查 `visualasset/` 现成素材——Kenney Tiny Farm 内无女孩角色；内部生图模型返回 `402 insufficient balance`，故改为脚本化绘制 |
-| Kenney Tiny Farm（像素农场 tile 集） | `visualasset/kenney_tiny-farm/` | **CC0 1.0**（包内 `License.txt`；预览图标注 CC0，无需署名、可商用） | ⬜ **暂未使用** | 用户加入的素材；本轮逐格切片核对：角色仅 r9c0 男孩 / r9c1 农夫。后续若要用于任务卡角饰/空态插画，需在本表补登具体用途 |
-| 任务类型图标 ×5（日常/冒险/世界/自然/悬赏） | `apps/web/public/quest/`（源：`visualasset/quest_icons/native32/`） | **本项目自研**（`build_icons.py` 生成，含 light/dark 预览与 32px 原生尺寸） | ✅ **已用**（2026-10-06） | 映射：`daily`→01_daily、`world`→03_world、`scenery`→04_nature、`custom`→05_bounty、`adventure`→「今日冒险」HUD；落点与理由见 `p2-closure-record.md` §14.1，映射常量在 `apps/web/src/lib/quest-icons.ts` |
+| **任务图标库 33 枚**（统一 32×32） | `apps/web/public/icons/*.png`（源：`visualasset/quest_icons/native32/`、`kenney_tiny-farm/Tilemap/tilemap_packed.png`、`kenney_tiny_factory/Tilemap/tilemap_packed.png`） | 5 枚 quest_icons **本项目自研** + 28 枚 **Kenney Tiny Farm / Tiny Factory（均 CC0 1.0，包内 `License.txt`）** | ✅ **已用**（2026-10-06） | 生成脚本 `visualasset/build_icon_library.py` → 同时产出 UI 清单 `apps/web/src/lib/task-icons.ts` 与契约白名单 `packages/shared-types/src/task-icon.ts`（单一来源，防漂移）。**任务图标可由用户自选**（`Task.icon`，迁移 `20261006200000_task_icon`）；未选时按奖励档类型图标、再退中性图标。映射与实施见 `p2-closure-record.md` §15 |
+| Kenney Tiny Farm（像素农场 tile 集） | `visualasset/kenney_tiny-farm/` | **CC0 1.0**（包内 `License.txt`；无需署名、可商用） | ✅ **已用**（经上一条的图标库，22 枚） | 逐格切片核对：角色仅 r9c0 男孩 / r9c1 农夫（未使用） |
+| Kenney Tiny Factory（像素工厂 tile 集） | `visualasset/kenney_tiny_factory.zip`（解压副本不入库） | **CC0 1.0**（包内 `License.txt`） | ✅ **已用**（经图标库，6 枚：机械/机器人/箱子/屏幕/弹簧/设备） | 旧项目 Demo 底部即注明使用该包做卡片 tile 占位 |
+| 任务类型图标 ×5（日常/冒险/世界/自然/悬赏） | 已并入上表"任务图标库" | 本项目自研 | ✅ 已用 | 同时用于奖励档分类图标与 HUD「今日冒险」 |
 
 > 纪律：**未使用的素材也登记**（来源、许可、是否已落地），避免日后出现"仓库里有一堆来源不明的图"。
 

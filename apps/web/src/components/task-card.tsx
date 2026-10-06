@@ -4,28 +4,23 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown } from 'lucide-react';
 import { TaskDto, TaskStatusAction } from '@huahua/shared-types';
 import { Panel } from './ui/card';
-import { Badge } from './ui/badge';
 import { TaskStatusBadge } from './ui/status-badge';
 import { PixelBar } from './ui/pixel-bar';
-import { subjectMeta } from '../lib/constants';
-import { questIconForRewardProfile } from '../lib/quest-icons';
-import { taskProgress, taskProgressColor } from '../lib/task-progress';
 import { ApiError } from '../lib/api/client';
 import { tasksApi } from '../lib/api/tasks';
 import { formatHM, parseIso } from '../lib/schedule';
+import { taskTileIconUrl, taskTypeLabel } from '../lib/quest-icons';
+import { taskProgress, taskProgressColor } from '../lib/task-progress';
 import { useUser } from '../hooks/use-user';
 import { cn } from '../lib/utils';
 
-// TaskCard → 可展开任务面板（docs/p2-ui-ux-review.md §9「TaskCard 升级为可展开面板」）
-// 展开内容：进度 PixelBar + 完成标准 + 行内操作（开始/完成/继续）+ 详情/编辑入口 + 像素角饰。
+// TaskCard → 可展开任务面板（docs/p2-closure-record.md §12/§15；视觉对齐旧项目 Demo proto-kid-v2）
+// 尺寸与信息密度按 Demo：64px 图标 tile、大字标题、两个 chip（状态 + 任务类型）、
+// 一行元信息（预计用时 · 计划/截止）、右侧 chevron；展开后 = 虚线分隔 + 进度 + 完成标准 + 行内操作。
 //
-// 两个"展示层派生"的说明（不改模型）：
-//  1) **进度**：见 lib/task-progress.ts（按状态映射），标题明确标注"按状态"，不让用户误以为是精细进度。
-//  2) **完成标准**：复用 task.description（创建页字段标签同步改为「完成标准 / 说明」）。
-//
-// 行内操作调 POST /tasks/:id/status（start/complete/resume，v1.2 §8.2）：
-//  - 仅"任务所属孩子"可执行（服务端同样限制）；complete 走统一完成模型：
-//    无需审批 = 自动定稿并发奖；需审批 = 生成待确认申请，任务状态保持进行中。
+// 两个"展示层派生"（不改模型）：
+//  1) 进度：见 lib/task-progress.ts（按状态映射），标题写明"按状态"。
+//  2) 完成标准：复用 task.description；图标/类型：见 lib/quest-icons.ts。
 const INLINE_ACTION: Partial<Record<string, { action: TaskStatusAction; label: string }>> = {
   pending: { action: 'start', label: '▶ 开始' },
   in_progress: { action: 'complete', label: '✓ 完成' },
@@ -37,7 +32,6 @@ export function TaskCard({ task }: { task: TaskDto }) {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const subj = subjectMeta(task.subject);
   const progress = taskProgress(task.status);
   const action = INLINE_ACTION[task.status];
   const isOwnChild = user?.role === 'child' && task.childId === user.userId;
@@ -60,7 +54,6 @@ export function TaskCard({ task }: { task: TaskDto }) {
     onError: (err, a) => {
       const e = err instanceof ApiError ? err : null;
       if (a === 'complete' && e?.status === 409) {
-        // 同一任务已有 pending 完成记录（部分唯一索引兜底），对用户而言就是"已提交过"
         setNotice('已提交过，等待家长确认');
       } else if (e?.status === 403) {
         setNotice('只有任务所属的孩子可以操作');
@@ -72,60 +65,64 @@ export function TaskCard({ task }: { task: TaskDto }) {
     },
   });
 
+  const meta: string[] = [];
+  if (task.estimatedMinutes) meta.push(`预计 ${task.estimatedMinutes} 分钟`);
+  if (task.dueDate) meta.push(`计划 ${new Date(task.dueDate).toLocaleDateString('zh-CN')}`);
+  if (task.startAt) {
+    meta.push(`${formatHM(parseIso(task.startAt))}${task.endAt ? `–${formatHM(parseIso(task.endAt))}` : ''}`);
+  }
+
   return (
     <Panel className={cn('overflow-hidden', expanded && 'bg-panelLight')}>
-      {/* 头部：整行可点，展开/收起（原来点击直接跳详情，现改为展开，详情入口在面板内） */}
       <button
         type="button"
         data-task-card-toggle
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-3 p-3 text-left transition hover:bg-panelLight"
+        className="flex w-full items-center gap-3 p-3 pr-2 text-left transition hover:bg-panelLight"
       >
-        <span className="relative grid h-10 w-10 shrink-0 place-items-center border-2 border-ink bg-panelLight">
-          {/* 任务类型图标（奖励档分类派生：日常/世界/风物/悬赏），32px 原生像素图 */}
+        {/* 图标 tile（64px，自选图标 > 类型图标 > 中性图标）+ 像素角饰 */}
+        <span className="relative grid h-16 w-16 shrink-0 place-items-center border-2 border-ink bg-panelLight shadow-pixel">
           <img
-            src={questIconForRewardProfile(task.rewardProfile)}
+            src={taskTileIconUrl(task)}
             alt=""
             aria-hidden
-            className="h-8 w-8 [image-rendering:pixelated]"
+            className="h-12 w-12 [image-rendering:pixelated]"
           />
-          {/* 像素角饰（Demo 风格） */}
-          <span aria-hidden className="absolute -left-1 -top-1 h-1.5 w-1.5 bg-accent" />
-          <span aria-hidden className="absolute -bottom-1 -right-1 h-1.5 w-1.5 bg-accent" />
+          <span aria-hidden className="absolute -left-1 -top-1 h-2 w-2 bg-accent" />
+          <span aria-hidden className="absolute -bottom-1 -right-1 h-2 w-2 bg-accent" />
         </span>
 
         <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2">
-            <span className="truncate font-bold text-ink">{task.title}</span>
-            <TaskStatusBadge status={task.status} />
-          </span>
-          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-inkSoft">
+          <span className="flex items-center gap-1.5">
             {task.color && (
-              <span aria-hidden className="h-2 w-2 border border-ink/50" style={{ backgroundColor: task.color }} />
+              <span aria-hidden className="h-3 w-3 shrink-0 border-2 border-ink" style={{ backgroundColor: task.color }} />
             )}
-            <span>
-              {subj.emoji} {subj.label}
+            <span className="truncate text-base font-extrabold text-ink">{task.title}</span>
+          </span>
+          {/* 两个 chip：状态 + 任务类型（Demo 一致） */}
+          <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <TaskStatusBadge status={task.status} />
+            <span className="border-2 border-ink bg-panel px-1.5 py-0.5 text-xs font-bold text-ink">
+              {taskTypeLabel(task.rewardProfile)}
             </span>
-            {task.requiresApproval && <Badge variant="soft">需确认</Badge>}
-            {task.startAt && (
-              <span>
-                {formatHM(parseIso(task.startAt))}
-                {task.endAt ? `–${formatHM(parseIso(task.endAt))}` : ''}
+            {task.requiresApproval && (
+              <span className="border-2 border-warning/70 bg-panelLight px-1.5 py-0.5 text-xs font-bold text-ink">
+                需确认
               </span>
             )}
-            {task.dueDate && <span>截止 {new Date(task.dueDate).toLocaleDateString('zh-CN')}</span>}
           </span>
+          {meta.length > 0 && <span className="mt-1 block truncate text-xs text-inkSoft">{meta.join(' · ')}</span>}
         </span>
 
         <ChevronDown
           aria-hidden
-          className={cn('h-4 w-4 shrink-0 text-inkSoft transition-transform', expanded && 'rotate-180')}
+          className={cn('h-5 w-5 shrink-0 text-inkSoft transition-transform', expanded && 'rotate-180')}
         />
       </button>
 
       {expanded && (
-        <div className="border-t-2 border-dashed border-ink/30 px-3 pb-3 pt-2">
+        <div className="mx-3 border-t-2 border-dashed border-ink/40 pb-3 pt-2">
           {/* 进度（按状态派生） */}
           <div className="flex items-center justify-between text-xs font-bold text-inkSoft">
             <span>进度（按状态）</span>
@@ -139,37 +136,11 @@ export function TaskCard({ task }: { task: TaskDto }) {
             {task.description?.trim() || <span className="text-inkSoft">（未填写完成标准）</span>}
           </p>
 
-          {/* 元信息 */}
-          <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-inkSoft">
-            <div className="flex gap-1">
-              <dt>时间：</dt>
-              <dd className="text-ink">
-                {task.startAt
-                  ? `${formatHM(parseIso(task.startAt))}${task.endAt ? `–${formatHM(parseIso(task.endAt))}` : ''}`
-                  : '未安排'}
-              </dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>预计用时：</dt>
-              <dd className="text-ink">{task.estimatedMinutes ? `${task.estimatedMinutes} 分钟` : '未填'}</dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>截止：</dt>
-              <dd className="text-ink">
-                {task.dueDate ? new Date(task.dueDate).toLocaleDateString('zh-CN') : '无'}
-              </dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>需确认：</dt>
-              <dd className="text-ink">{task.requiresApproval ? '是' : '否'}</dd>
-            </div>
-          </dl>
-
           {notice && (
             <p className="mt-3 border-2 border-ink/40 bg-panel px-2 py-1 text-xs font-bold text-ink">{notice}</p>
           )}
 
-          {/* 行内操作 */}
+          {/* 行内操作（大按钮，Demo 一致） */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {isOwnChild && action && (
               <button
@@ -179,7 +150,10 @@ export function TaskCard({ task }: { task: TaskDto }) {
                   setNotice(null);
                   mutation.mutate(action.action);
                 }}
-                className="border-2 border-ink bg-accent px-3 py-1.5 text-xs font-extrabold text-white shadow-pixel transition active:translate-y-0.5 disabled:opacity-60"
+                className={cn(
+                  'border-2 border-ink px-4 py-2 text-sm font-extrabold text-white shadow-pixel transition active:translate-y-1 disabled:opacity-60',
+                  action.action === 'complete' ? 'bg-ok' : 'bg-accent',
+                )}
               >
                 {mutation.isPending ? '处理中…' : action.label}
               </button>
@@ -187,21 +161,21 @@ export function TaskCard({ task }: { task: TaskDto }) {
             {isOwnChild && task.status === 'in_progress' && (
               <Link
                 to={`/tasks/${task.id}/submit`}
-                className="border-2 border-ink bg-panel px-3 py-1.5 text-xs font-bold text-ink shadow-pixel transition active:translate-y-0.5"
+                className="border-2 border-ink bg-panel px-4 py-2 text-sm font-bold text-ink shadow-pixel transition active:translate-y-1"
               >
                 写说明并提交
               </Link>
             )}
             <Link
               to={`/tasks/${task.id}`}
-              className="border-2 border-ink bg-panel px-3 py-1.5 text-xs font-bold text-ink shadow-pixel transition active:translate-y-0.5"
+              className="border-2 border-ink bg-panel px-4 py-2 text-sm font-bold text-ink shadow-pixel transition active:translate-y-1"
             >
               查看详情 →
             </Link>
             {user?.role === 'parent' && (
               <Link
                 to={`/tasks/${task.id}/edit`}
-                className="border-2 border-ink/40 bg-panelLight px-3 py-1.5 text-xs font-bold text-inkSoft transition hover:text-ink"
+                className="border-2 border-ink/40 bg-panelLight px-4 py-2 text-sm font-bold text-inkSoft transition hover:text-ink"
               >
                 编辑
               </Link>

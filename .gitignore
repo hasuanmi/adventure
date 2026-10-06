@@ -45,9 +45,16 @@ pnpm-debug.log*
 .idea/
 .vscode/
 Thumbs.db
-# 浏览器检查/预览截图（scripts/browser-check.mjs）
+
+# 浏览器检查产物与预览截图（scripts/browser-check.mjs）
 ui-shots*/
 
-# Python 构建脚本缓存（visualasset/build_icons.py）
+# Python 构建脚本缓存（visualasset/*.py）
 __pycache__/
 *.pyc
+
+# 素材处理中间产物（可由脚本重生成，避免重复入库）
+visualasset/_*.png
+visualasset/icon-library.json
+# Kenney Tiny Factory 由同目录 zip 解压得到（zip 已入库），解压副本不重复提交
+visualasset/kenney_tiny-factory/

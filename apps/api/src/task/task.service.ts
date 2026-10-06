@@ -78,6 +78,7 @@ export class TaskService {
         dueDate: parseDate(dto.dueDate, 'dueDate'),
         estimatedMinutes: dto.estimatedMinutes,
         color: dto.color,
+        icon: dto.icon ?? null,
         repeatWeekdays: dto.repeatWeekdays,
         requiresApproval: dto.requiresApproval ?? false,
         reviewerId: dto.reviewerId,
@@ -172,6 +173,8 @@ export class TaskService {
         dueDate: dto.dueDate !== undefined ? parseDate(dto.dueDate, 'dueDate') : undefined,
         estimatedMinutes: dto.estimatedMinutes,
         color: dto.color,
+        // 图标：'' 表示清空回中性默认图标（DTO 白名单已放行空串）
+        icon: dto.icon === undefined ? undefined : dto.icon === '' ? null : dto.icon,
         repeatWeekdays: dto.repeatWeekdays,
         requiresApproval,
         reviewerId,
@@ -241,6 +244,7 @@ export class TaskService {
     dueDate: Date | null;
     estimatedMinutes: number | null;
     color: string | null;
+    icon: string | null;
     repeatWeekdays: number | null;
     requiresApproval: boolean;
     reviewerId: string | null;
@@ -263,6 +267,7 @@ export class TaskService {
       dueDate: r.dueDate?.toISOString() ?? null,
       estimatedMinutes: r.estimatedMinutes,
       color: r.color,
+      icon: r.icon,
       repeatWeekdays: r.repeatWeekdays,
       requiresApproval: r.requiresApproval,
       reviewerId: r.reviewerId,

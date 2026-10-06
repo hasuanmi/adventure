@@ -10,7 +10,11 @@ import { tasksApi } from '../../lib/api/tasks';
 import { rewardProfilesApi } from '../../lib/api/reward-profiles';
 import { taskFormSchema, type TaskFormValues } from '../../lib/task-form-schema';
 import { toDateInputValue, toLocalInputValue, defaultTaskSlot, endAtFromStart } from '../../lib/schedule';
-import { QUEST_ICON_BY_CATEGORY, questIconForRewardProfile } from '../../lib/quest-icons';
+import {
+  categoryIconUrl,
+  rewardProfileIconUrl,
+} from '../../lib/quest-icons';
+import { TASK_ICONS } from '../../lib/task-icons';
 import type { RewardProfileCategory } from '@huahua/shared-types';
 import { useUser } from '../../hooks/use-user';
 import { COLOR_PRESETS, PRIORITY_OPTIONS, SUBJECT_OPTIONS, WEEKDAY_REPEAT_OPTIONS } from '../../lib/constants';
@@ -102,6 +106,7 @@ function TaskCreateSheetForm({
           dueDate: task.dueDate ? task.dueDate.slice(0, 10) : '',
           estimatedMinutes: task.estimatedMinutes ?? '',
           color: task.color ?? '',
+          icon: task.icon ?? '',
           repeatWeekdays: task.repeatWeekdays ?? 0,
           requiresApproval: task.requiresApproval,
           reviewerId: task.reviewerId ?? '',
@@ -121,6 +126,7 @@ function TaskCreateSheetForm({
           dueDate: toDateInputValue(new Date()),
           estimatedMinutes: '',
           color: '',
+          icon: '',
           repeatWeekdays: 0,
           requiresApproval: false,
           reviewerId: '',
@@ -187,6 +193,8 @@ function TaskCreateSheetForm({
       dueDate: values.dueDate ? new Date(values.dueDate).toISOString() : undefined,
       estimatedMinutes: isEdit ? (estimatedMinutes ?? null) : estimatedMinutes,
       color: isEdit ? (values.color || null) : (values.color || undefined),
+      // 图标：编辑态传空串=清空（服务端映射为 NULL → 中性默认图标）
+      icon: isEdit ? (values.icon || '') : (values.icon || undefined),
       repeatWeekdays: isEdit ? (repeatWeekdays ?? null) : repeatWeekdays,
       requiresApproval,
       reviewerId: requiresApproval ? (values.reviewerId || undefined) : undefined,
@@ -312,7 +320,7 @@ function TaskCreateSheetForm({
                 <SelectTrigger>
                   <span className="flex items-center gap-2">
                     <img
-                      src={questIconForRewardProfile(form.watch('rewardProfile'))}
+                      src={rewardProfileIconUrl(form.watch('rewardProfile'))}
                       alt=""
                       aria-hidden
                       className="h-5 w-5 [image-rendering:pixelated]"
@@ -327,7 +335,7 @@ function TaskCreateSheetForm({
                       <SelectLabel>
                         <span className="flex items-center gap-1.5">
                           <img
-                            src={QUEST_ICON_BY_CATEGORY[g.category as RewardProfileCategory]}
+                            src={categoryIconUrl(g.category as RewardProfileCategory)}
                             alt=""
                             aria-hidden
                             className="h-4 w-4 [image-rendering:pixelated]"
@@ -346,6 +354,49 @@ function TaskCreateSheetForm({
                 来自系统配置，只显示名称；左侧图标 = 任务类型（日常/世界/风物/悬赏）。
               </p>
             </div>
+          </div>
+
+          {/* 图标（来自素材库，每个任务自选；不选则按任务类型给出图标） */}
+          <div className="mt-3">
+            <Label>图标（可选，来自像素素材库）</Label>
+            <div className="mt-1 flex flex-wrap gap-1.5 rounded border-2 border-dashed border-ink/30 p-2">
+              <button
+                type="button"
+                data-icon-option=""
+                aria-pressed={!form.watch('icon')}
+                onClick={() => form.setValue('icon', '')}
+                className={cn(
+                  'grid h-11 w-11 place-items-center border-2 text-[10px] font-bold',
+                  !form.watch('icon') ? 'border-accent bg-panelLight text-accent' : 'border-ink/30 bg-panel text-inkSoft',
+                )}
+                title="不指定（按任务类型自动显示）"
+              >
+                自动
+              </button>
+              {TASK_ICONS.map((icon) => {
+                const active = form.watch('icon') === icon.key;
+                return (
+                  <button
+                    key={icon.key}
+                    type="button"
+                    data-icon-option={icon.key}
+                    aria-pressed={active}
+                    aria-label={`选择图标 ${icon.label}`}
+                    title={icon.label}
+                    onClick={() => form.setValue('icon', active ? '' : icon.key)}
+                    className={cn(
+                      'grid h-11 w-11 place-items-center border-2 transition active:translate-y-0.5',
+                      active ? 'border-accent bg-panelLight ring-2 ring-accent' : 'border-ink/40 bg-panel hover:bg-panelLight',
+                    )}
+                  >
+                    <img src={`/icons/${icon.key}.png`} alt={icon.label} className="h-8 w-8 [image-rendering:pixelated]" />
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-xs text-inkSoft">
+              选择后该任务在今日列表/详情显示这枚图标；「自动」= 按下面的奖励档位类型显示。
+            </p>
           </div>
 
           {/* 颜色（8 预设色块，huahuastudy 样式；日程/卡片用色） */}

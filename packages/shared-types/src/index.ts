@@ -6,6 +6,7 @@ export * from './family';
 export * from './error';
 export * from './common';
 export * from './task';
+export * from './task-icon';
 export * from './completion';
 export * from './approval';
 export * from './growth';

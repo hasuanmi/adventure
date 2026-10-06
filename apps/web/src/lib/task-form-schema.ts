@@ -12,6 +12,8 @@ export const taskFormSchema = z.object({
   // 预计用时（分钟；number input 空值经 valueAsNumber 为 NaN）
   estimatedMinutes: z.union([z.number().int().min(1).max(1440), z.literal(''), z.nan()]).optional(),
   color: z.string().optional().or(z.literal('')),
+  // 任务图标 key（图标库白名单；空串 = 中性默认图标）
+  icon: z.string().optional().or(z.literal('')),
   // 周重复位掩码（0 = 不重复）
   repeatWeekdays: z.number().int().min(0).max(127),
   requiresApproval: z.boolean(),

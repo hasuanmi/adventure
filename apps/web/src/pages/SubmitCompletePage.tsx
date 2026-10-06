@@ -13,7 +13,7 @@ import { Label } from '../components/ui/label';
 import { Skeleton } from '../components/ui/skeleton';
 import { TaskStatusBadge } from '../components/ui/status-badge';
 import { tasksApi } from '../lib/api/tasks';
-import { questIconForRewardProfile } from '../lib/quest-icons';
+import { taskTileIconUrl } from '../lib/quest-icons';
 
 // Submit Complete（无旧项目参考——自研；表单模式参考 §二点七）
 const submitSchema = z.object({
@@ -83,7 +83,7 @@ export function SubmitCompletePage() {
         <PanelHeader>提交完成</PanelHeader>
         <div className="mb-3 flex items-center gap-2">
           <img
-            src={questIconForRewardProfile(task.rewardProfile)}
+            src={taskTileIconUrl(task)}
             alt=""
             aria-hidden
             className="h-6 w-6 shrink-0 [image-rendering:pixelated]"

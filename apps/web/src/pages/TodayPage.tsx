@@ -15,7 +15,7 @@ import { useUser } from '../hooks/use-user';
 import { approvalsApi } from '../lib/api/approvals';
 import { familyApi } from '../lib/api/family';
 import { tasksApi } from '../lib/api/tasks';
-import { QUEST_ICON_ADVENTURE } from '../lib/quest-icons';
+import { TASK_ICON_ADVENTURE_URL } from '../lib/quest-icons';
 import { TODAY_TABS, TodayTabKey, todayTasks } from '../lib/today';
 
 // Today（docs/ui-reference.md §4 + docs/p2-ui-ux-review.md §8：
@@ -105,7 +105,7 @@ export function TodayPage() {
       <Panel className="border-2 border-ink bg-ink text-panelLight">
         <PanelHeader className="flex items-center gap-2 !text-panelLight">
           <img
-            src={QUEST_ICON_ADVENTURE}
+            src={TASK_ICON_ADVENTURE_URL}
             alt=""
             aria-hidden
             className="h-6 w-6 [image-rendering:pixelated]"

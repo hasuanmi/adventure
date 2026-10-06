@@ -154,21 +154,36 @@ class Cdp {
     await this.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...base });
   }
 
-  /** 按选择器点击元素中心（元素必须在视口内） */
+  /** 按选择器点击元素中心：**先滚动进视口再量坐标**（否则点击落空，甚至被 Radix 当成"点外部"关掉弹窗） */
   async clickSelector(selector) {
+    const found = await this.evaluate(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return false;
+      el.scrollIntoView({ block: 'center', inline: 'center' });
+      return true;
+    })()`);
+    if (!found) throw new Error(`找不到元素: ${selector}`);
+    await sleep(150);
     const box = await this.evaluate(`(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
-      if (!el) return null;
       const r = el.getBoundingClientRect();
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, text: (el.textContent || '').trim() };
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, text: (el.textContent || '').trim() };
     })()`);
-    if (!box) throw new Error(`找不到元素: ${selector}`);
     await this.clickAt(box.x, box.y);
     return box;
   }
 
-  /** 在选择器匹配的元素中，点击文本包含 text 的第一个（用于"某张卡片上的某个按钮"） */
+  /** 在选择器匹配的元素中，点击文本包含 text 的第一个（先滚动进视口） */
   async clickByText(selector, text) {
+    const found = await this.evaluate(`(() => {
+      const els = [...document.querySelectorAll(${JSON.stringify(selector)})];
+      const el = els.find((e) => (e.textContent || '').includes(${JSON.stringify(text)}));
+      if (!el) return false;
+      el.scrollIntoView({ block: 'center', inline: 'center' });
+      return true;
+    })()`);
+    if (!found) throw new Error(`找不到含文本「${text}」的 ${selector}`);
+    await sleep(150);
     const box = await this.evaluate(`(() => {
       const els = [...document.querySelectorAll(${JSON.stringify(selector)})];
       const el = els.find((e) => (e.textContent || '').includes(${JSON.stringify(text)}));
@@ -176,7 +191,7 @@ class Cdp {
       const r = el.getBoundingClientRect();
       return { x: r.left + r.width / 2, y: r.top + r.height / 2, text: (el.textContent || '').trim().slice(0, 50) };
     })()`);
-    if (!box) throw new Error(`找不到含文本「${text}」的 ${selector}`);
+    if (!box) throw new Error(`滚动后找不到含文本「${text}」的 ${selector}`);
     await this.clickAt(box.x, box.y);
     return box;
   }
@@ -494,6 +509,14 @@ async function main() {
     check('两个时间都可编辑（非 disabled/readonly）', await cdp.evaluate(
       `[...document.querySelectorAll('input[type="datetime-local"]')].every((i) => !i.disabled && !i.readOnly)`,
     ), true);
+    // 图标选择器（每个任务可从素材库自选图标，而不是所有任务一个默认图标）
+    const iconOptions = await cdp.evaluate(`document.querySelectorAll('[data-icon-option]').length`);
+    check('创建弹窗提供素材库图标选择器（≥30 枚）', iconOptions >= 30, true);
+    const iconLoaded = await cdp.evaluate(`(() => {
+      const imgs = [...document.querySelectorAll('[data-icon-option] img')];
+      return { total: imgs.length, ok: imgs.filter((i) => i.naturalWidth > 0).length };
+    })()`);
+    check('图标库图片全部可加载', iconLoaded.ok, iconLoaded.total);
 
     // 关掉新建任务 Sheet（Esc），回到干净的今日页
     await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
@@ -596,11 +619,18 @@ async function main() {
     await cdp.send('Page.navigate', { url: `${BASE}/` });
     await cdp.waitFor('[data-task-card-toggle]');
     const questImgs = await cdp.evaluate(`(() => {
-      const imgs = [...document.querySelectorAll('img[src^="/quest/"]')];
+      const imgs = [...document.querySelectorAll('img[src^="/icons/"]')];
       return { count: imgs.length, loaded: imgs.filter((i) => i.naturalWidth > 0).length };
     })()`);
-    check('今日页使用任务类型图标（HUD + 任务卡 tile，≥2 处）', questImgs.count >= 2, true);
-    check('任务类型图标全部加载成功（public/quest 资源可用）', questImgs.loaded, questImgs.count);
+    check('今日页使用素材库图标（HUD + 任务卡 tile，≥2 处）', questImgs.count >= 2, true);
+    check('素材库图标全部加载成功（public/icons 资源可用）', questImgs.loaded, questImgs.count);
+    // 卡片尺寸按 Demo 放大：tile 图标渲染尺寸应 >= 40px
+    const tileSize = await cdp.evaluate(`(() => {
+      const t = document.querySelector('[data-task-card-toggle]');
+      const img = t ? t.querySelector('img[src^="/icons/"]') : null;
+      return img ? Math.round(img.getBoundingClientRect().width) : 0;
+    })()`);
+    check('任务卡图标已按 Demo 放大（≥40px）', Number(tileSize) >= 40, true);
 
     // ---------- 10. 任务详情页微调（类型图标/进度/完成标准） ----------
     await cdp.send('Page.navigate', { url: `${BASE}/tasks/${taskId}` });
@@ -610,7 +640,7 @@ async function main() {
     check('详情页完成标准取到 description', detailText.includes('做完 20 道口算'), true);
     check('详情页含「进度（按状态）」', detailText.includes('进度（按状态）'), true);
     const detailIcon = await cdp.evaluate(
-      `(() => { const i = document.querySelector('img[src^="/quest/"]'); return i ? i.naturalWidth : 0; })()`,
+      `(() => { const i = document.querySelector('img[src^="/icons/"]'); return i ? i.naturalWidth : 0; })()`,
     );
     check('详情页类型图标已加载', Number(detailIcon) > 0, true);
     await cdp.shot('12-task-detail');
@@ -634,12 +664,62 @@ async function main() {
     await cdp.waitFor('[data-checkin-cell]');
     const checkinText = String(await cdp.evaluate('document.body.innerText'));
     check('完成任务后本周打卡点亮 1/7', checkinText.includes('已点亮 1/7'), true);
+    // 打卡栏结构（对齐 Demo）：周一…周日标签在格子上方；今天=★、已打卡=✓
+    const checkin = await cdp.evaluate(`(() => {
+      const cells = [...document.querySelectorAll('[data-checkin-cell]')];
+      const pad = (n) => String(n).padStart(2, '0');
+      const d = new Date();
+      const todayKey = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      return {
+        labels: ['周一','周二','周三','周四','周五','周六','周日'].filter((l) => document.body.innerText.includes(l)).length,
+        states: cells.map((c) => ({ key: c.getAttribute('title'), state: c.getAttribute('data-checkin-state') })),
+        todayKey,
+      };
+    })()`);
+    check('打卡栏含周一~周日 7 个标签', checkin.labels, 7);
+    check('打卡栏恰有一格是今天', checkin.states.filter((c) => c.key === checkin.todayKey).length, 1);
+    check(
+      '打卡栏今天的格子已点亮（✓）',
+      checkin.states.find((c) => c.key === checkin.todayKey)?.state,
+      'done',
+    );
+    check('已打卡格数 ≥1', checkin.states.filter((c) => c.state === 'done').length >= 1, true);
+    // 滚动到打卡区再截图（否则被浮动导航压住，人工复核看不到）
+    await cdp.evaluate(
+      `document.querySelector('[data-checkin-cell]')?.closest('div.border-2')?.scrollIntoView({ block: 'center' })`,
+    );
+    await sleep(400);
+    await cdp.shot('14b-week-checkin');
     await cdp.clickSelector('[data-growth-entry]');
     await sleep(1200);
     const growthAfter = String(await cdp.evaluate('document.body.innerText'));
     check('成长页累计 XP 已增加', /累计 [1-9]\d* XP/.test(growthAfter), true);
     check('成长页奖励记录非空', growthAfter.includes('+') && growthAfter.includes('XP'), true);
     await cdp.shot('14-growth-after-reward');
+
+    // ---------- 13. 自选图标：孩子经界面新建任务并选定素材库图标 ----------
+    await cdp.send('Page.navigate', { url: `${BASE}/` });
+    await cdp.waitFor('[data-task-card-toggle]');
+    await cdp.clickByText('button', '新建任务');
+    await cdp.waitFor('[data-icon-option]');
+    const customTitle = `自选图标任务 ${STAMP}`;
+    await cdp.type('input[name="title"]', customTitle);
+    await cdp.clickSelector('[data-icon-option="sheep"]');
+    await sleep(200);
+    const picked = await cdp.evaluate(
+      `document.querySelector('[data-icon-option="sheep"]').getAttribute('aria-pressed')`,
+    );
+    check('图标选择器可选中（aria-pressed 生效）', picked, 'true');
+    await cdp.clickByText('button', '创建任务');
+    await sleep(2500);
+    const newCard = await cdp.evaluate(`(() => {
+      const t = [...document.querySelectorAll('[data-task-card-toggle]')].find((e) => e.textContent.includes(${JSON.stringify(customTitle)}));
+      if (!t) return null;
+      const img = t.querySelector('img');
+      return { src: img ? img.getAttribute('src') : null, w: img ? Math.round(img.getBoundingClientRect().width) : 0 };
+    })()`);
+    check('新建任务卡片显示自选图标', String(newCard?.src ?? '').includes('/icons/sheep.png'), true);
+    check('自选图标渲染尺寸合理（≥40px）', Number(newCard?.w ?? 0) >= 40, true);
   } finally {
     clearTimeout(watchdog);
     try {

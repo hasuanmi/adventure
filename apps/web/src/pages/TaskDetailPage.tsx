@@ -16,7 +16,7 @@ import { familyApi } from '../lib/api/family';
 import { tasksApi } from '../lib/api/tasks';
 import { rewardProfilesApi } from '../lib/api/reward-profiles';
 import { subjectMeta } from '../lib/constants';
-import { questIconForRewardProfile } from '../lib/quest-icons';
+import { taskTileIconUrl, taskTypeLabel } from '../lib/quest-icons';
 import { formatDateTime, taskProgress, taskProgressColor } from '../lib/task-progress';
 
 const WEEK_CN = ['一', '二', '三', '四', '五', '六', '日'];
@@ -150,7 +150,7 @@ export function TaskDetailPage() {
         <div className="flex items-center gap-3">
           <span className="relative grid h-12 w-12 place-items-center border-2 border-ink bg-panelLight">
             <img
-              src={questIconForRewardProfile(task.rewardProfile)}
+              src={taskTileIconUrl(task)}
               alt=""
               aria-hidden
               className="h-9 w-9 [image-rendering:pixelated]"
@@ -162,6 +162,7 @@ export function TaskDetailPage() {
             <h2 className="truncate text-xl font-extrabold">{task.title}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <TaskStatusBadge status={task.status} />
+              <Badge variant="soft">{taskTypeLabel(task.rewardProfile)}</Badge>
               <Badge variant="soft">
                 {subj.emoji} {subj.label}
               </Badge>
