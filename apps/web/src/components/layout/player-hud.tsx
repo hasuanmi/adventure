@@ -48,7 +48,7 @@ export function PlayerHud({
     >
       {/* 昵称：头像右上区域 */}
       <span
-        className="absolute right-6 top-3 z-20 max-w-[8rem] truncate text-[17px] font-extrabold leading-none tracking-wide text-panelLight"
+        className="absolute right-6 top-3 z-30 max-w-[8rem] truncate text-[17px] font-extrabold leading-none tracking-wide text-panelLight"
         data-hud-nickname
         style={{ textShadow: '1px 1px 0 rgba(0,0,0,0.35)' }}
       >
@@ -78,7 +78,7 @@ export function PlayerHud({
       </span>
 
       {/* XP：右下、与头像相连（-ml-1 贴住框边）、底边与头像底对齐（items-end + mb-1） */}
-      <span data-hud-xp-bar className="-ml-6 mb-1 block h-2.5 w-28 border-2 border-ink bg-panel" aria-hidden>
+      <span data-hud-xp-bar className="relative z-0 -ml-6 mb-1 block h-2.5 w-28 border-2 border-ink bg-panel" aria-hidden>
         <span
           data-hud-xp-fill
           className="block h-full bg-xp transition-[width] duration-500"
