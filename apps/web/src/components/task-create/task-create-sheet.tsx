@@ -135,9 +135,6 @@ function TaskCreateSheetForm({
   useEffect(() => setSubmitError(null), [task?.id]);
 
   const profiles = profilesQuery.data?.profiles ?? [];
-  // 图标按「类型分类」取，保证每类各不相同且只画一个
-  const selectedCategory =
-    profiles.find((p) => p.code === (form.watch('rewardProfile') || 'TYPE_DAILY'))?.category ?? 'daily';
   const members = familyQuery.data?.members ?? [];
   const parentOptions = members.filter((m) => m.role === 'parent' || m.role === 'teacher');
   const childOptions = members.filter((m) => m.role === 'child');
@@ -368,15 +365,7 @@ function TaskCreateSheetForm({
                 onValueChange={(v) => form.setValue('rewardProfile', v)}
               >
                 <SelectTrigger>
-                  <span className="flex items-center gap-2">
-                    <img
-                      src={categoryIconUrl(selectedCategory)}
-                      alt=""
-                      aria-hidden
-                      className="h-5 w-5 [image-rendering:pixelated]"
-                    />
-                    <SelectValue />
-                  </span>
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {profiles.map((p) => (
