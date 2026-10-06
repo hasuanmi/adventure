@@ -76,14 +76,14 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
               </span>
             )}
           </span>
-          <span className="mt-1.5 text-sm font-extrabold text-panelLight">每日成长卡</span>
-          <span className="text-[11px] text-panelLight/75">
+          <span className="mt-1.5 text-sm font-extrabold text-ink">每日成长卡</span>
+          <span className="text-[11px] text-inkSoft">
             {claimed ? '✓ 今日已领取' : '完成今日冒险后领取'}
           </span>
         </button>
 
         {claimed && (
-          <Link to="/growth-cards" className="mt-0.5 text-[11px] font-bold text-panelLight/80 underline">
+          <Link to="/growth-cards" className="mt-0.5 text-[11px] font-bold text-inkSoft underline">
             查看今日成长记录 →
           </Link>
         )}

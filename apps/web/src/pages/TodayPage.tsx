@@ -103,8 +103,8 @@ export function TodayPage() {
   return (
     <div className="space-y-4">
       {/* 今日冒险（进度 + 完成后同框内的成长卡入口） */}
-      <Panel data-adventure-panel className="border-2 border-ink bg-ink text-panelLight">
-        <PanelHeader className="flex items-center gap-2 !text-panelLight">
+      <Panel data-adventure-panel className="pixel-frame text-ink">
+        <PanelHeader className="flex items-center gap-2 !text-ink">
           <img
             src={TASK_ICON_ADVENTURE_URL}
             alt=""
@@ -113,13 +113,13 @@ export function TodayPage() {
           />
           今日冒险
         </PanelHeader>
-        <p className="mb-2 text-sm">
+        <p className="mb-2 text-sm font-bold text-inkSoft">
           已完成 {completedCount}/{scoped.length} 个任务 · 进度 {percent}%
         </p>
         {/* 冒险进度条：多层像素边框 + 跟随百分比的进度标记 + 变化时的轻量动画
             （统计逻辑不变；ready 用于避免首次加载误播"完成"动画） */}
         <AdventureProgress percent={percent} ready={tasksQuery.isSuccess} markerSrc="/ui/sunflower.png" />
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-panelLight/80">
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-inkSoft">
           {scoped.length > 0 && percent >= 100 ? (
             <>
               <img
@@ -128,7 +128,7 @@ export function TodayPage() {
                 aria-hidden
                 className="h-4 w-4 [image-rendering:pixelated]"
               />
-              <span data-adventure-done className="font-extrabold text-panelLight">
+              <span data-adventure-done className="font-extrabold text-ink">
                 今日冒险完成！
               </span>
             </>
