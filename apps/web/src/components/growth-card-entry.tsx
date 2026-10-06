@@ -13,8 +13,9 @@ export interface GrowthCardEntryProps {
 /**
  * 「每日打卡 → 今日成长卡」入口（2026-10-06 用户订正）：
  *  · **不是考勤**：不出现签退/打卡时间/打卡成功/考勤等表达；
- *  · 位置：紧跟在「今日冒险」模块下面，**只有今日冒险 100% 完成后**才出现的一行简洁入口；
+ *  · 位置：**与「今日冒险」同一个框内**，紧接"今日冒险完成！"下方；仅 100% 后出现；
  *  · 未领取 → 🎁 每日打卡 / 完成今日冒险，领取今日成长卡 →；已领取 → ✓ 今日成长卡已领取。
+ *  · 因为父级是深色 HUD 面板，入口本身用米色"票券"底，链接文字用浅色。
  */
 export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
   const [open, setOpen] = useState(false);
@@ -36,7 +37,7 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
         data-growth-card-entry
         data-growth-card-claimed={claimed ? 'true' : 'false'}
         onClick={() => setOpen(true)}
-        className="flex w-full items-center gap-2 border-2 border-ink bg-panel px-3 py-2 text-left shadow-pixel transition active:translate-y-0.5"
+        className="mt-2 flex w-full items-center gap-2 border-2 border-ink bg-panel px-3 py-2 text-left shadow-pixel transition active:translate-y-0.5"
       >
         <Gift className="h-4 w-4 shrink-0 text-accent" />
         <span className="min-w-0 flex-1">
@@ -53,7 +54,7 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
       {claimed && (
         <Link
           to="/growth-cards"
-          className="block text-right text-[11px] font-bold text-inkSoft underline"
+          className="mt-1 block text-right text-[11px] font-bold text-panelLight/80 underline"
         >
           查看今日成长记录 →
         </Link>

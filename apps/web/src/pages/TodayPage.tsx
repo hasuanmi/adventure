@@ -102,8 +102,8 @@ export function TodayPage() {
 
   return (
     <div className="space-y-4">
-      {/* 今日冒险（PixelBar 进度） */}
-      <Panel className="border-2 border-ink bg-ink text-panelLight">
+      {/* 今日冒险（进度 + 完成后同框内的成长卡入口） */}
+      <Panel data-adventure-panel className="border-2 border-ink bg-ink text-panelLight">
         <PanelHeader className="flex items-center gap-2 !text-panelLight">
           <img
             src={TASK_ICON_ADVENTURE_URL}
@@ -136,6 +136,9 @@ export function TodayPage() {
             '继续加油，小冒险家！'
           )}
         </p>
+        {/* 每日成长卡入口：**与今日冒险同一个框**，紧接在"今日冒险完成！"下方；
+            仅 100% 后出现（用户规则）；不含任何考勤表达 */}
+        <GrowthCardEntry allDone={scoped.length > 0 && percent >= 100} />
       </Panel>
 
       {/* 待审批提示（真实 API；仅审核人可见）→ 进入审批页处理 */}
@@ -210,9 +213,6 @@ export function TodayPage() {
           <QuickAddRow onClick={() => setCreateOpen(true)} />
         </div>
       </section>
-
-      {/* 每日成长卡入口（P4 订正：不是考勤）—— 仅今日冒险 100% 后出现的一行简洁入口 */}
-      <GrowthCardEntry allDone={scoped.length > 0 && percent >= 100} />
 
       {/* 本周打卡（像素格）：孩子的"我"视角才有意义（数据是本人流水） */}
       {user?.role === 'child' && <WeekCheckin />}

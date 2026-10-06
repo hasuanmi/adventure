@@ -1331,6 +1331,22 @@ async function main() {
     // ---------- 13f. 今日成长卡（P4 订正：不是考勤） ----------
     const gateAfter = await cdp.evaluate(`Boolean(document.querySelector('[data-growth-card-entry]'))`);
     check('今日任务 100% 后出现成长卡入口', gateAfter, true);
+    // 用户要求：入口必须在「今日冒险」**同一个框内**（紧接"今日冒险完成！"下方）
+    const samePanel = await cdp.evaluate(`(() => {
+      const panel = document.querySelector('[data-adventure-panel]');
+      const entry = document.querySelector('[data-growth-card-entry]');
+      const done = document.querySelector('[data-adventure-done]');
+      if (!panel || !entry || !done) return null;
+      const r = (el) => el.getBoundingClientRect();
+      return {
+        inside: panel.contains(entry),
+        belowDone: Math.round(r(entry).top) >= Math.round(r(done).bottom) - 2,
+        gap: Math.round(r(entry).top - r(done).bottom),
+      };
+    })()`);
+    console.log(`      同框检查：${JSON.stringify(samePanel)}`);
+    check('成长卡入口与今日冒险在同一个面板内', samePanel?.inside === true, true);
+    check('入口位于"今日冒险完成！"下方', samePanel?.belowDone === true, true);
     // 硬要求：页面不得出现成人考勤措辞
     const pageText = String(await cdp.evaluate('document.body.innerText'));
     for (const word of ['签退', '已打卡', '打卡时间', '考勤', '打卡成功']) {
