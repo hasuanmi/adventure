@@ -18,6 +18,8 @@ export default {
         warning: 'rgb(var(--warning-rgb) / <alpha-value>)',
         danger: 'rgb(var(--danger-rgb) / <alpha-value>)',
         xp: 'rgb(var(--xp-rgb) / <alpha-value>)',
+        xpLight: 'rgb(var(--xp-light-rgb) / <alpha-value>)',
+        xpDark: 'rgb(var(--xp-dark-rgb) / <alpha-value>)',
       },
       boxShadow: {
         pixel: 'var(--shadow)',

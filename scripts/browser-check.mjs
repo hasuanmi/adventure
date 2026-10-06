@@ -880,33 +880,60 @@ async function main() {
     check('经验值文字在条内（cur / need XP）', /^\d+ \/ \d+ XP$/.test(levelUi?.labelText ?? '') && levelUi?.inside === true, true);
     check('经验条为直角像素条（参考图为方角）', Number(levelUi?.radius ?? 0) <= 2, true);
     check('表头头像换成 toon 角色图', String(levelUi?.imgSrc ?? '').includes('avatar-girl-toon'), true);
-    // 参考图的形态：**外框 + 立体阴影 + 深蓝填充 + 白色余量**
+    // 参考图的形态（用户逐条要求）：**头像框与经验条框共用双层像素边框 + 顶底对齐 + 浅米色余量 + 深藏蓝填充**
     const levelLook = await cdp.evaluate(`(() => {
-      const frame = document.querySelector('[data-growth-entry] [data-level-frame]');
-      const bar = document.querySelector('[data-growth-entry] [data-xp-bar]');
+      const entry = document.querySelector('[data-growth-entry]');
+      const frames = [...entry.querySelectorAll('[data-pixel-frame]')];
+      const bar = entry.querySelector('[data-xp-bar]');
       const fill = bar ? bar.querySelector('span[aria-hidden]') : null;
-      if (!frame || !bar || !fill) return null;
-      const fs = getComputedStyle(frame);
-      const bs = getComputedStyle(bar);
-      const is = getComputedStyle(fill);
+      const badge = entry.querySelector('[data-level-badge]');
+      const label = entry.querySelector('[data-xp-label]');
+      const img = entry.querySelector('[data-avatar-img]');
+      if (frames.length < 2 || !bar || !fill || !img) return null;
+      const [avatarFrame, levelFrame] = frames;
+      const cs = (el) => getComputedStyle(el);
+      const innerOf = (el) => el.firstElementChild;
+      const rect = (el) => el.getBoundingClientRect();
+      const imgR = rect(img);
+      const innerR = rect(innerOf(avatarFrame));
+      const af = rect(avatarFrame);
+      const lf = rect(levelFrame);
       const nums = (s) => (s.match(/\\d+(\\.\\d+)?/g) || []).map(Number);
-      const [r, g, b] = nums(is.backgroundColor);
+      const [r, g, b] = nums(cs(fill).backgroundColor);
       return {
-        frameBorder: parseFloat(fs.borderTopWidth) || 0,
-        frameShadow: fs.boxShadow,
-        barBg: bs.backgroundColor,
-        fillBg: is.backgroundColor,
-        fillShadow: is.boxShadow,
+        frameOuterBorder: parseFloat(cs(avatarFrame).borderTopWidth) || 0,
+        frameOuterBg: cs(avatarFrame).backgroundColor,
+        frameInnerBorder: parseFloat(cs(innerOf(avatarFrame)).borderTopWidth) || 0,
+        frameInnerBg: cs(innerOf(avatarFrame)).backgroundColor,
+        levelOuterBorder: parseFloat(cs(levelFrame).borderTopWidth) || 0,
+        levelOuterBg: cs(levelFrame).backgroundColor,
+        levelInnerBg: cs(innerOf(levelFrame)).backgroundColor,
+        badgeBorder: parseFloat(cs(badge).borderTopWidth) || 0,
+        alignTop: Math.abs(af.top - lf.top),
+        alignBottom: Math.abs(af.bottom - lf.bottom),
+        avatarSqueeze: Math.abs(imgR.width - imgR.height),
+        imgFit: cs(img).objectFit,
+        imgInside: imgR.left >= innerR.left - 1 && imgR.right <= innerR.right + 1 && imgR.top >= innerR.top - 1 && imgR.bottom <= innerR.bottom + 1,
+        avatarBox: Math.round(imgR.width),
+        barBg: cs(bar).backgroundColor,
+        fillBg: cs(fill).backgroundColor,
+        fillShadow: cs(fill).boxShadow,
         blueish: b > r && b > g,
-        labelBg: getComputedStyle(document.querySelector('[data-xp-label]')).backgroundColor,
+        labelBg: cs(label).backgroundColor,
       };
     })()`);
-    console.log(`      等级观感：${JSON.stringify(levelLook)}`);
-    check('等级区有外框（2px 描边）', Number(levelLook?.frameBorder ?? 0) >= 2, true);
-    check('等级外框有像素硬阴影（立体感）', /rgba?\(/.test(String(levelLook?.frameShadow)) && levelLook?.frameShadow !== 'none', true);
-    check('经验条余量为白色（不是与填充同色）', levelLook?.barBg === 'rgb(255, 255, 255)', true);
-    check('经验条填充为深蓝', levelLook?.blueish === true, true);
-    check('经验条填充有内阴影（立体）', String(levelLook?.fillShadow ?? '').includes('inset'), true);
+    console.log(`      状态栏观感：${JSON.stringify(levelLook)}`);
+    check('头像有独立像素边框（存在 2 个 PixelFrame）', levelLook !== null, true);
+    check('头像框与经验条框描边厚度一致（均 2px）', levelLook?.frameOuterBorder === 2 && levelLook?.levelOuterBorder === 2, true);
+    check('两框配色层次一致（外暖棕层 + 内米白层）', levelLook?.frameOuterBg === levelLook?.levelOuterBg && levelLook?.frameInnerBg === levelLook?.levelInnerBg, true);
+    check('内层描边同为 2px、等级方块也同厚度', levelLook?.frameInnerBorder === 2 && levelLook?.badgeBorder === 2, true);
+    check('头像框与经验条框顶部对齐（|Δ| ≤ 1px）', Number(levelLook?.alignTop ?? 99) <= 1, true);
+    check('头像框与经验条框底部对齐（|Δ| ≤ 2px）', Number(levelLook?.alignBottom ?? 99) <= 2, true);
+    check('头像完整显示在框内（object-contain 且未溢出）', levelLook?.imgFit === 'contain' && levelLook?.imgInside === true, true);
+    check('头像未被挤压（宽高差 ≤ 1px）', Number(levelLook?.avatarSqueeze ?? 99) <= 1, true);
+    check('经验条余量为浅米色（panel，不是白色）', levelLook?.barBg === 'rgb(242, 229, 201)', true);
+    check('经验条填充为参考图深藏蓝', levelLook?.fillBg === 'rgb(68, 78, 105)', true);
+    check('经验条填充有上下斜角（bevel 内阴影）', String(levelLook?.fillShadow ?? '').includes('inset'), true);
     check('经验文字自带深色底（任何进度都可读）', levelLook?.labelBg === levelLook?.fillBg, true);
     const avatarWidth = await cdp.evaluate(
       `(() => { const i = document.querySelector('[data-growth-entry] img'); return i ? i.naturalWidth : 0; })()`,
@@ -935,6 +962,40 @@ async function main() {
       })()`),
       true,
     );
+    // ---------- 8b. 窄屏（360px）下状态栏不挤压/不溢出（用户要求） ----------
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: 360,
+      height: 740,
+      deviceScaleFactor: 2,
+      mobile: true,
+    });
+    await sleep(700);
+    const narrow = await cdp.evaluate(`(() => {
+      const entry = document.querySelector('[data-growth-entry]');
+      const frames = [...entry.querySelectorAll('[data-pixel-frame]')];
+      const img = entry.querySelector('[data-avatar-img]');
+      const bar = entry.querySelector('[data-xp-bar]');
+      const label = entry.querySelector('[data-xp-label]');
+      const r = (el) => el.getBoundingClientRect();
+      const b = bar ? r(bar) : null;
+      const l = label ? r(label) : null;
+      return {
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+        avatarW: img ? Math.round(r(img).width) : 0,
+        barW: b ? Math.round(b.width) : 0,
+        labelFits: Boolean(b && l && l.width <= b.width + 1),
+        alignTop: frames.length >= 2 ? Math.abs(r(frames[0]).top - r(frames[1]).top) : 99,
+      };
+    })()`);
+    console.log(`      窄屏 360px：${JSON.stringify(narrow)}`);
+    check('窄屏无横向溢出', Number(narrow.overflow) <= 1, true);
+    check('窄屏头像未被挤小（≥ 32px）', Number(narrow.avatarW) >= 32, true);
+    check('窄屏经验条仍有可用宽度（≥ 80px）', Number(narrow.barW) >= 80, true);
+    check('窄屏 XP 文字仍在条内', narrow.labelFits === true, true);
+    check('窄屏头像框与经验条框仍顶部对齐', Number(narrow.alignTop) <= 1, true);
+    await cdp.shot('20-header-narrow-360');
+    await cdp.send('Emulation.clearDeviceMetricsOverride');
+    await sleep(500);
     await cdp.shot('11-growth-page');
 
     // ---------- 9. 任务类型图标（quest_icons 接入：卡片 tile + HUD「冒险」） ----------

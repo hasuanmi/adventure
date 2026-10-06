@@ -7,6 +7,7 @@ import {
 } from '@huahua/shared-types';
 import { Panel, PanelHeader } from '../components/ui/card';
 import { PixelBar } from '../components/ui/pixel-bar';
+import { PixelFrame } from '../components/ui/pixel-frame';
 import { Skeleton } from '../components/ui/skeleton';
 import { Empty } from '../components/ui/empty';
 import { WeekCheckin } from '../components/week-checkin';
@@ -66,39 +67,41 @@ export function GrowthPage() {
               </span>
             </p>
             <div className="mt-1.5">
-              {/* 与表头同一套等级 UI：外框 + 数字徽章 + 条内经验文字（深蓝填充 / 白色余量 / 立体内阴影） */}
-              <span
+              {/* 与表头**同一套 HUD**：共用 PixelFrame 双层像素框 + 数字徽章 + 条内经验文字 */}
+              <PixelFrame
                 data-level-frame
-                className="flex items-center gap-2 border-2 border-ink bg-panelLight p-1 shadow-pixel"
+                className="w-full"
+                innerClassName="min-w-0 flex-1 gap-2 p-1"
               >
                 <span
                   data-level-badge
-                  className="grid h-8 min-w-8 shrink-0 place-items-center border-2 border-ink bg-accent px-1.5 text-base font-extrabold text-white"
-                  style={{ boxShadow: 'inset 0 -2px 0 rgba(0,0,0,0.25)' }}
+                  className="grid h-8 w-8 shrink-0 place-items-center border-2 border-ink bg-accent text-base font-extrabold text-white"
+                  style={{
+                    boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.25)',
+                  }}
                 >
                   {xpProgress.level}
                 </span>
                 <span
                   data-xp-bar
-                  className="relative h-8 min-w-0 flex-1 overflow-hidden border-2 border-ink bg-white"
+                  className="relative h-8 min-w-0 flex-1 overflow-hidden border-2 border-ink bg-panel"
                 >
                   <span
                     aria-hidden
                     className="absolute inset-y-0 left-0 bg-xp transition-all"
                     style={{
                       width: `${Math.round(xpProgress.ratio * 100)}%`,
-                      boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.35)',
+                      boxShadow: 'inset 0 2px 0 var(--xp-light), inset 0 -2px 0 var(--xp-dark)',
                     }}
                   />
-                  {/* 数字自带深色底（同表头）：任何进度下都可读 */}
                   <span
                     data-xp-label
-                    className="absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center bg-xp px-2 text-sm font-extrabold text-white"
+                    className="absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center whitespace-nowrap bg-xp px-2 text-xs font-extrabold text-white sm:text-sm"
                   >
                     {xpProgress.current} / {xpProgress.needed} XP
                   </span>
                 </span>
-              </span>
+              </PixelFrame>
             </div>
           </div>
           <div className="shrink-0 border-2 border-ink/60 bg-panel/10 px-2 py-1.5 text-center">

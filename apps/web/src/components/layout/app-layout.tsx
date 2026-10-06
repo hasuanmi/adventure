@@ -6,6 +6,7 @@ import { cn } from '../../lib/utils';
 import { useUser } from '../../hooks/use-user';
 import { authApi } from '../../lib/api/auth';
 import { growthApi } from '../../lib/api/growth';
+import { PixelFrame } from '../ui/pixel-frame';
 import { clearSession } from '../../store/auth';
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
@@ -43,65 +44,79 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* HUD 顶部（docs/ui-reference.md §2） */}
       <header className="shrink-0 border-b-4 border-ink bg-ink text-panelLight">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
-          {/* 左上角：头像 + 等级徽章 + 经验条（参考旧项目等级 UI：徽章 + 条内文字"25 / 30 XP"）
-              → 点击进成长页（用户决策：成长不占底部导航） */}
+          {/* 左上角游戏状态栏（2026-10-06 按用户参考图重做视觉/布局）：
+              · 头像框与经验条框**共用 PixelFrame**（双层像素边框）→ 厚度/配色/层次一致
+              · 两者同一水平行 + items-stretch → **顶部与底部自动对齐**
+              · 日期与累计 XP 放在整行的**下方**
+              点击整个区域进成长页（用户决策：成长不占底部导航） */}
           <Link
             to="/growth"
             data-growth-entry
             aria-label="我的成长"
             title="我的成长"
-            className="flex min-w-0 flex-1 items-center gap-2 transition active:translate-y-0.5"
+            className="flex min-w-0 flex-1 flex-col gap-1 transition active:translate-y-0.5"
           >
-            <img
-              src="/avatar-girl-toon.png"
-              alt=""
-              aria-hidden
-              className="h-11 w-11 shrink-0 border-2 border-panelLight/50 bg-panelLight object-cover"
-            />
-            <span className="min-w-0 flex-1">
-              {/* 等级框（参考旧项目）：**外框 + 数字徽章 + 条内经验文字**，
-                  条有立体内阴影；填充深蓝、余量白色，白字带深色描边保证在两种底上都可读 */}
-              <span
+            {/* 头像 + 经验条同一行；stretch 让两框等高（顶/底对齐） */}
+            <span className="flex min-w-0 items-stretch gap-2">
+              <PixelFrame className="shrink-0" shadow={false} innerClassName="p-1">
+                <img
+                  data-avatar-img
+                  src="/avatar-girl-toon.png"
+                  alt=""
+                  aria-hidden
+                  className="block h-9 w-9 object-contain"
+                />
+              </PixelFrame>
+
+              <PixelFrame
                 data-level-frame
-                className="flex items-center gap-1.5 border-2 border-ink bg-panelLight p-1 shadow-pixel"
+                className="min-w-0 flex-1"
+                shadow={false}
+                innerClassName="min-w-0 flex-1 gap-1.5 p-1"
               >
                 <span
                   data-level-badge
-                  className="grid h-6 min-w-6 shrink-0 place-items-center border-2 border-ink bg-accent px-1 text-sm font-extrabold text-white"
-                  style={{ boxShadow: 'inset 0 -2px 0 rgba(0,0,0,0.25)' }}
+                  className="grid h-7 w-7 shrink-0 place-items-center border-2 border-ink bg-accent text-sm font-extrabold text-white"
+                  style={{
+                    boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.25)',
+                  }}
                 >
                   {xpProgress ? xpProgress.level : '—'}
                 </span>
                 <span
                   data-xp-bar
-                  className="relative h-6 min-w-0 flex-1 overflow-hidden border-2 border-ink bg-white"
+                  className="relative h-7 min-w-0 flex-1 overflow-hidden border-2 border-ink bg-panel"
                 >
+                  {/* 进度填充：深藏蓝 + 上下斜角（按参考图采样色） */}
                   <span
                     aria-hidden
                     className="absolute inset-y-0 left-0 bg-xp transition-all"
                     style={{
                       width: `${Math.round((xpProgress?.ratio ?? 0) * 100)}%`,
-                      boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.35)',
+                      boxShadow: 'inset 0 2px 0 var(--xp-light), inset 0 -2px 0 var(--xp-dark)',
                     }}
                   />
-                  {/* 数字**自带深色底**：进度 0% 时也不会白字压白底（用户要求"数字后面要深色"） */}
+                  {/* 数字自带深色底 → 填充区/未填充区上都可读；nowrap 避免窄屏被绝对定位框挤成两行 */}
                   <span
                     data-xp-label
-                    className="absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center bg-xp px-1.5 text-[10px] font-extrabold text-white"
+                    className="absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center whitespace-nowrap bg-xp px-1.5 text-[11px] font-extrabold text-white"
                   >
                     {xpProgress ? `${xpProgress.current} / ${xpProgress.needed} XP` : '— XP'}
                   </span>
                 </span>
-              </span>
-              <span className="mt-0.5 block truncate text-[10px] text-panelLight/70">
-                {dateLabel} · 累计 {xp} XP
-              </span>
+              </PixelFrame>
+            </span>
+            {/* 日期与累计 XP：整行下方 */}
+            <span className="block truncate text-[10px] text-panelLight/70">
+              {dateLabel} · 累计 {xp} XP
             </span>
           </Link>
           <div className="flex shrink-0 items-center gap-2 text-xs">
             {user ? (
               <>
-                <span className="border-2 border-panel/40 bg-panel/10 px-2 py-1">
+                {/* 角色文字在窄屏隐藏（360px 实测会挤压经验条，只剩 46px）；
+                    角色信息在成长页/家庭页仍可见 */}
+                <span className="hidden border-2 border-panel/40 bg-panel/10 px-2 py-1 sm:inline-block">
                   {user.role === 'child' ? '小冒险家' : user.role === 'parent' ? '家长' : user.role}
                 </span>
                 <Link
