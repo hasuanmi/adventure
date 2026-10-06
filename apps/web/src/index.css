@@ -174,3 +174,14 @@ body {
     page-break-inside: avoid;
   }
 }
+/* 像素徽章放射光的闪烁（固定不旋转；尊重减少动效设置） */
+@keyframes pixel-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.pixel-blink {
+  animation: pixel-blink 1.1s steps(2, end) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pixel-blink { animation: none; }
+}
