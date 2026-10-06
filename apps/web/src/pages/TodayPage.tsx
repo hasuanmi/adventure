@@ -118,7 +118,7 @@ export function TodayPage() {
         </p>
         {/* 冒险进度条：多层像素边框 + 跟随百分比的进度标记 + 变化时的轻量动画
             （统计逻辑不变；ready 用于避免首次加载误播"完成"动画） */}
-        <AdventureProgress percent={percent} ready={tasksQuery.isSuccess} />
+        <AdventureProgress percent={percent} ready={tasksQuery.isSuccess} markerSrc="/ui/sunflower.png" />
         <p className="mt-2 flex items-center gap-1.5 text-xs text-panelLight/80">
           {scoped.length > 0 && percent >= 100 ? (
             <>
