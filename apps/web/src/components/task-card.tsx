@@ -107,6 +107,7 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
     <Panel
       className={cn('relative overflow-hidden', expanded && 'bg-panelLight')}
       style={{
+        padding: 0,
         borderWidth: 4,
         borderStyle: 'solid',
         borderColor: 'transparent',
@@ -119,7 +120,7 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
         data-task-card-toggle
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-1 px-[3px] py-[3px] text-left transition hover:bg-panelLight"
+        className="flex w-full items-center gap-2 px-2 py-1.5 text-left transition hover:bg-panelLight"
       >
         {/* 图标 tile（44px 见方，对齐 Demo 比例；内嵌 32px 原生图标 → 像素不糊）+ 像素角饰 */}
         <span className="relative grid h-9 w-9 shrink-0 place-items-center border-2 border-ink bg-panelLight shadow-pixel">
