@@ -94,10 +94,15 @@ class Cdp {
     this.ws = new WebSocket(wsUrl);
     this.id = 0;
     this.pending = new Map();
-    this.ready = new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', () => resolve());
-      this.ws.addEventListener('error', (e) => reject(new Error(`CDP 连接失败: ${e.message ?? e.type}`)));
-    });
+    // 握手必须有超时：Chrome 偶尔接受 TCP 却完不成 WS 握手，会把脚本永久挂住
+    // （CI 上实测过一次：本地 40 秒的检查在 CI 里卡了 15 分钟以上）
+    this.ready = Promise.race([
+      new Promise((resolve, reject) => {
+        this.ws.addEventListener('open', () => resolve());
+        this.ws.addEventListener('error', (e) => reject(new Error(`CDP 连接失败: ${e.message ?? e.type}`)));
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('CDP WebSocket 握手超时（15s）')), 15000)),
+    ]);
     this.ws.addEventListener('message', (event) => {
       const msg = JSON.parse(event.data);
       if (msg.id && this.pending.has(msg.id)) {
@@ -168,6 +173,14 @@ class Cdp {
     return file;
   }
 
+  close() {
+    try {
+      this.ws.close();
+    } catch {
+      /* ignore */
+    }
+  }
+
   /** 轮询等待选择器出现（SPA 启动引导/拉数据需要时间，固定 sleep 不可靠） */
   async waitFor(selector, timeoutMs = 12000) {
     const deadline = Date.now() + timeoutMs;
@@ -185,9 +198,19 @@ class Cdp {
 }
 
 async function main() {
+  // 看门狗：任何未预料的挂起都在 3 分钟后以明确退出码结束，避免 CI 卡到 job 超时
+  const watchdog = setTimeout(() => {
+    console.error('ERROR 全局超时（180s）：检查脚本疑似挂起，强制退出');
+    process.exit(3);
+  }, 180000);
+  watchdog.unref();
+
   mkdirSync(OUT, { recursive: true });
+  const t0 = Date.now();
+  const mark = (label) => console.log(`STEP  +${Math.round((Date.now() - t0) / 1000)}s  ${label}`);
 
   // ---------- 0. 造数据：家长（已建家庭）+ 孩子 + 今天的任务 ----------
+  mark('准备测试数据');
   console.log(`=== BROWSER CHECK (base=${BASE}) ===`);
   await api('POST', '/auth/register', null, { username: PARENT, password: PASSWORD, role: 'parent' });
   const parentLogin = await api('POST', '/auth/login', null, { username: PARENT, password: PASSWORD });
@@ -219,6 +242,7 @@ async function main() {
   // ---------- 1. 启动无头浏览器 ----------
   const exe = EDGE_CANDIDATES.find((p) => existsSync(p));
   if (!exe) throw new Error('找不到 Chromium 内核浏览器（Edge/Chrome）');
+  mark(`启动浏览器 ${exe}`);
   const port = 9333 + Math.floor(Math.random() * 200);
   const profile = join(tmpdir(), `ui-check-${STAMP}`);
   const browser = spawn(exe, [
@@ -251,6 +275,7 @@ async function main() {
 
   const cdp = new Cdp(wsUrl);
   await cdp.ready;
+  mark('CDP 已连接');
   const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' });
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
   const raw = cdp.send.bind(cdp);
@@ -388,8 +413,15 @@ async function main() {
       `[...document.querySelectorAll('input[type="datetime-local"]')].every((i) => !i.disabled && !i.readOnly)`,
     ), true);
   } finally {
+    clearTimeout(watchdog);
     try {
-      browser.kill();
+      cdp.close();
+    } catch {
+      /* ignore */
+    }
+    try {
+      // Linux 下 Chrome 会有子进程，SIGKILL 更干净
+      browser.kill(process.platform === 'win32' ? undefined : 'SIGKILL');
     } catch {
       /* ignore */
     }
@@ -401,8 +433,9 @@ async function main() {
     cleanupDb();
   }
 
-  console.log(`=== RESULT: pass=${pass} fail=${fail} ===`);
-  if (fail > 0) process.exitCode = 1;
+  console.log(`=== RESULT: pass=${pass} fail=${fail} (${Math.round((Date.now() - t0) / 1000)}s) ===`);
+  // 必须显式退出：残留的 WS/子进程句柄会让 Node 不退出，CI 步骤就会一直挂着
+  process.exit(fail > 0 ? 1 : 0);
 }
 
 main().catch((err) => {
@@ -412,5 +445,5 @@ main().catch((err) => {
   } catch {
     /* ignore */
   }
-  process.exitCode = 1;
+  process.exit(1);
 });
