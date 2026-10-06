@@ -34,6 +34,13 @@ const EDGE_CANDIDATES = [
   '/usr/bin/chromium-browser',
 ];
 
+// CDP 客户端用 Node 内置的全局 WebSocket（Node 21+ 才有）。CI 曾用 Node 20 跑本脚本，
+// 报 "WebSocket is not defined" —— 这里显式提示，避免再靠猜。
+if (typeof WebSocket === 'undefined') {
+  console.error(`ERROR 本脚本需要 Node >= 21（内置 WebSocket），当前 ${process.version}。请用 Node 22 LTS 运行。`);
+  process.exit(2);
+}
+
 let pass = 0;
 let fail = 0;
 const check = (name, actual, expected) => {
