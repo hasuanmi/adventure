@@ -44,18 +44,26 @@ Tailwind 侧必须写成 `rgb(var(--x-rgb) / <alpha-value>)`。**若写成 `var(
 
 > 新增主题色时：`index.css` 里加 `--x` 与 `--x-rgb` 两份，`tailwind.config.ts` 里用 `rgb(var(--x-rgb) / <alpha-value>)`。
 
-### 1.2 HUD 像素边框统一用 `PixelFrame`（2026-10-06）
+### 1.2 顶部信息栏结构（2026-10-06：**已按用户订正重做**）
 
-顶部游戏状态栏（头像 / 等级经验条）的双层像素边框 = `apps/web/src/components/ui/pixel-frame.tsx`：
+结构（**三个互相独立的组件**，各自有边框，**外面不套任何大框**）：
 
 ```
-外层 2px 深棕描边(--ink) → 2px 暖棕层(--inkSoft) → 内层 2px 深棕描边 + 米白底(--panelLight) → 内容
+[头像框]   [ 1 ]   [ XP 条：蓝已完成 + 米完成 + 文字叠加居中 ]
+                  10月6日 周二 · 累计 20 XP
 ```
 
-- **头像框与经验条框必须共用该组件**（用户明确要求"厚度、配色、明暗层次一致，避免看起来来自两套 UI"）；
-- 经验条：填充 `--xp` + 上下斜角 `--xp-light`/`--xp-dark`，未填充为浅米色 `panel`，**XP 数字自带 `bg-xp` 深色底**（任何进度下都压在深色上，保证可读）；
-- 布局：头像框与经验条框同处一行且 `items-stretch` → **顶/底自动对齐**；日期与累计 XP 放在整行下方；
-- 窄屏（360px）实测：角色文字隐藏（`hidden sm:inline-block`）以给经验条让出宽度，无横向溢出。
+- 头像框：独立小框，`border-2 border-ink bg-panelLight p-0.5`（内边距仅 2px，贴身），内部 `img` 用 `object-contain`；
+- 等级数字：独立小方框（`h-9 w-9 border-2 border-ink bg-accent`），与 XP 条横向并列；
+- XP 条：`border-2 border-ink bg-panel`（边框**只包进度条本体**），一个高度、一个水平面：
+  内部只有两层 —— **填充层**（`bg-xp` + 上下斜角 `--xp-light`/`--xp-dark`，`absolute inset-y-0 left-0`）与
+  **文字层**（`absolute inset-0 grid place-items-center`，**无底色**，白色 + 深色描边，进度多少都居中不变）；
+- 三者 `h-9` 等高、`items-start` 顶部对齐、间距统一 `gap-2`；日期与累计 XP 在整行下方。
+
+> **❌ 明确禁止**（2026-10-06 走错一次并已回退）：给「等级数字 + XP 条」整体再套一个外框（"大框套小框"）、
+> 用大面积深棕底框包住右侧区域、把 XP 文字做成带底色的独立块（会看成上下两层进度条）。
+> 像素感来自"少量描边 + 暖米色底 + 深蓝进度 + 统一厚度 + 清晰间距"，不是靠叠加边框。
+> 曾为此新建的 `ui/pixel-frame.tsx` 已删除，**不要重新引入**。
 
 ## 2. Layout
 

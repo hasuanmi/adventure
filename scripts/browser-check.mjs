@@ -880,63 +880,80 @@ async function main() {
     check('经验值文字在条内（cur / need XP）', /^\d+ \/ \d+ XP$/.test(levelUi?.labelText ?? '') && levelUi?.inside === true, true);
     check('经验条为直角像素条（参考图为方角）', Number(levelUi?.radius ?? 0) <= 2, true);
     check('表头头像换成 toon 角色图', String(levelUi?.imgSrc ?? '').includes('avatar-girl-toon'), true);
-    // 参考图的形态（用户逐条要求）：**头像框与经验条框共用双层像素边框 + 顶底对齐 + 浅米色余量 + 深藏蓝填充**
+    // 顶部信息栏结构（用户订正）：**三个独立组件** —— 头像框 | 等级小方框 | XP 条；
+    // 禁止任何"包住等级+XP 的大外框"（大框套小框），XP 文字不得有自己的底色块
     const levelLook = await cdp.evaluate(`(() => {
       const entry = document.querySelector('[data-growth-entry]');
-      const frames = [...entry.querySelectorAll('[data-pixel-frame]')];
-      const bar = entry.querySelector('[data-xp-bar]');
-      const fill = bar ? bar.querySelector('span[aria-hidden]') : null;
-      const badge = entry.querySelector('[data-level-badge]');
-      const label = entry.querySelector('[data-xp-label]');
+      if (!entry) return null;
+      const avatarFrame = entry.querySelector('[data-avatar-frame]');
       const img = entry.querySelector('[data-avatar-img]');
-      if (frames.length < 2 || !bar || !fill || !img) return null;
-      const [avatarFrame, levelFrame] = frames;
+      const badge = entry.querySelector('[data-level-badge]');
+      const bar = entry.querySelector('[data-xp-bar]');
+      const fill = entry.querySelector('[data-xp-fill]');
+      const label = entry.querySelector('[data-xp-label]');
+      if (!avatarFrame || !img || !badge || !bar || !fill || !label) return null;
+      const r = (el) => el.getBoundingClientRect();
       const cs = (el) => getComputedStyle(el);
-      const innerOf = (el) => el.firstElementChild;
-      const rect = (el) => el.getBoundingClientRect();
-      const imgR = rect(img);
-      const innerR = rect(innerOf(avatarFrame));
-      const af = rect(avatarFrame);
-      const lf = rect(levelFrame);
       const nums = (s) => (s.match(/\\d+(\\.\\d+)?/g) || []).map(Number);
-      const [r, g, b] = nums(cs(fill).backgroundColor);
+      const [fr, fg, fb] = nums(cs(fill).backgroundColor);
+      const barR = r(bar);
+      const labelR = r(label);
+      const fillR = r(fill);
+      const inner = {
+        top: barR.top + (parseFloat(cs(bar).borderTopWidth) || 0),
+        bottom: barR.bottom - (parseFloat(cs(bar).borderBottomWidth) || 0),
+      };
       return {
-        frameOuterBorder: parseFloat(cs(avatarFrame).borderTopWidth) || 0,
-        frameOuterBg: cs(avatarFrame).backgroundColor,
-        frameInnerBorder: parseFloat(cs(innerOf(avatarFrame)).borderTopWidth) || 0,
-        frameInnerBg: cs(innerOf(avatarFrame)).backgroundColor,
-        levelOuterBorder: parseFloat(cs(levelFrame).borderTopWidth) || 0,
-        levelOuterBg: cs(levelFrame).backgroundColor,
-        levelInnerBg: cs(innerOf(levelFrame)).backgroundColor,
+        // 三组件各自边框
+        avatarBorder: parseFloat(cs(avatarFrame).borderTopWidth) || 0,
         badgeBorder: parseFloat(cs(badge).borderTopWidth) || 0,
-        alignTop: Math.abs(af.top - lf.top),
-        alignBottom: Math.abs(af.bottom - lf.bottom),
-        avatarSqueeze: Math.abs(imgR.width - imgR.height),
-        imgFit: cs(img).objectFit,
-        imgInside: imgR.left >= innerR.left - 1 && imgR.right <= innerR.right + 1 && imgR.top >= innerR.top - 1 && imgR.bottom <= innerR.bottom + 1,
-        avatarBox: Math.round(imgR.width),
+        barBorder: parseFloat(cs(bar).borderTopWidth) || 0,
+        // 共同父元素（徽章与条的直接父）不得有边框/底色
+        parentBorder: parseFloat(cs(badge.parentElement).borderTopWidth) || 0,
+        parentBg: cs(badge.parentElement).backgroundColor,
+        parentIsShared: badge.parentElement === bar.parentElement,
+        // 直接祖父（再上一层）也不得有边框，且不得同时包住头像（避免大外框）
+        grandBorder: parseFloat(cs(badge.parentElement.parentElement).borderTopWidth) || 0,
+        grandContainsAvatar: badge.parentElement.parentElement.contains(avatarFrame),
+        // 等高 + 顶部对齐
+        heights: [Math.round(r(avatarFrame).height), Math.round(r(badge).height), Math.round(r(bar).height)],
+        tops: [Math.round(r(avatarFrame).top), Math.round(r(badge).top), Math.round(r(bar).top)],
+        // 头像框贴身（内边距 ≤ 4px）
+        avatarPad: [
+          Math.round(r(img).left - (r(avatarFrame).left + (parseFloat(cs(avatarFrame).borderLeftWidth) || 0))),
+          Math.round(r(img).top - (r(avatarFrame).top + (parseFloat(cs(avatarFrame).borderTopWidth) || 0))),
+        ],
+        // XP 文字：无底色、绝对定位、水平垂直都居中于整条
+        labelBg: cs(label).backgroundColor,
+        labelPos: cs(label).position,
+        labelCentered:
+          Math.abs((labelR.left + labelR.right) / 2 - (barR.left + barR.right) / 2) <= 2 &&
+          Math.abs((labelR.top + labelR.bottom) / 2 - (barR.top + barR.bottom) / 2) <= 2,
+        // 单一水平面：填充铺满条的内部高度，条内只有「填充 + 文字」两层
+        fillCoversInner: Math.abs(fillR.top - inner.top) <= 1 && Math.abs(fillR.bottom - inner.bottom) <= 1,
+        barChildren: bar.children.length,
         barBg: cs(bar).backgroundColor,
         fillBg: cs(fill).backgroundColor,
-        fillShadow: cs(fill).boxShadow,
-        blueish: b > r && b > g,
-        labelBg: cs(label).backgroundColor,
+        blueish: fb > fr && fb > fg,
+        imgFit: cs(img).objectFit,
       };
     })()`);
-    console.log(`      状态栏观感：${JSON.stringify(levelLook)}`);
-    check('头像有独立像素边框（存在 2 个 PixelFrame）', levelLook !== null, true);
-    check('头像框与经验条框描边厚度一致（均 2px）', levelLook?.frameOuterBorder === 2 && levelLook?.levelOuterBorder === 2, true);
-    check('两框配色层次一致（外暖棕层 + 内米白层）', levelLook?.frameOuterBg === levelLook?.levelOuterBg && levelLook?.frameInnerBg === levelLook?.levelInnerBg, true);
-    check('内层描边同为 2px、等级方块也同厚度', levelLook?.frameInnerBorder === 2 && levelLook?.badgeBorder === 2, true);
-    check('头像框与经验条框顶部对齐（|Δ| ≤ 1px）', Number(levelLook?.alignTop ?? 99) <= 1, true);
-    check('头像框与经验条框底部对齐（|Δ| ≤ 2px）', Number(levelLook?.alignBottom ?? 99) <= 2, true);
-    check('头像完整显示在框内（object-contain 且未溢出）', levelLook?.imgFit === 'contain' && levelLook?.imgInside === true, true);
-    check('头像未被挤压（宽高差 ≤ 1px）', Number(levelLook?.avatarSqueeze ?? 99) <= 1, true);
-    check('经验条余量为浅米色（panel，不是白色）', levelLook?.barBg === 'rgb(242, 229, 201)', true);
-    check('经验条填充为参考图深藏蓝', levelLook?.fillBg === 'rgb(68, 78, 105)', true);
-    check('经验条填充有上下斜角（bevel 内阴影）', String(levelLook?.fillShadow ?? '').includes('inset'), true);
-    check('经验文字自带深色底（任何进度都可读）', levelLook?.labelBg === levelLook?.fillBg, true);
+    console.log(`      顶部信息栏：${JSON.stringify(levelLook)}`);
+    check('三个组件都有各自边框（头像框/等级框/XP 条均 2px）', levelLook?.avatarBorder === 2 && levelLook?.badgeBorder === 2 && levelLook?.barBorder === 2, true);
+    check('等级框与 XP 条是同一父级的兄弟（无大外框）', levelLook?.parentIsShared === true && Number(levelLook?.parentBorder ?? 9) === 0, true);
+    check('父级无底色（不存在包住等级+XP 的大矩形）', levelLook?.parentBg === 'rgba(0, 0, 0, 0)', true);
+    check('更外层无边框且不同时包含头像（不形成大框套小框）', Number(levelLook?.grandBorder ?? 9) === 0 && levelLook?.grandContainsAvatar === true, true);
+    check('三组件等高（|Δ| ≤ 1px）', new Set(levelLook?.heights ?? []).size === 1, true);
+    check('三组件顶部对齐（|Δ| ≤ 1px）', new Set(levelLook?.tops ?? []).size === 1, true);
+    check('头像框贴身（内边距 ≤ 4px）', (levelLook?.avatarPad ?? [9, 9]).every((v) => v <= 4), true);
+    check('XP 文字无独立底色块', levelLook?.labelBg === 'rgba(0, 0, 0, 0)', true);
+    check('XP 文字绝对定位且整条居中', levelLook?.labelPos === 'absolute' && levelLook?.labelCentered === true, true);
+    check('XP 条只有一个水平面（填充铺满内部，无第二层）', levelLook?.fillCoversInner === true && levelLook?.barChildren === 2, true);
+    check('经验条未填充为浅米色', levelLook?.barBg === 'rgb(242, 229, 201)', true);
+    check('经验条填充为深藏蓝（参考采样色）', levelLook?.fillBg === 'rgb(68, 78, 105)' && levelLook?.blueish === true, true);
+    check('头像图片 object-contain（不裁切）', levelLook?.imgFit === 'contain', true);
     const avatarWidth = await cdp.evaluate(
-      `(() => { const i = document.querySelector('[data-growth-entry] img'); return i ? i.naturalWidth : 0; })()`,
+      `(() => { const i = document.querySelector('[data-avatar-img]'); return i ? i.naturalWidth : 0; })()`,
     );
     check('表头头像可加载（/avatar-girl.png 存在且可访问）', Number(avatarWidth) > 0, true);
     check('底部导航仍为 2 格（成长不占导航）', await cdp.evaluate(`document.querySelectorAll('nav a').length`), 2);
@@ -955,14 +972,22 @@ async function main() {
     check('成长页含奖励记录区', growthText.includes('奖励记录'), true);
     check('成长页含本周打卡', growthText.includes('本周打卡'), true);
     check(
-      '成长页等级 UI 同样含条内经验文字',
+      '成长页 XP 文字同样无底色块且居中',
       await cdp.evaluate(`(() => {
-        const l = document.querySelector('[data-xp-label]');
-        return Boolean(l && /^\\d+ \\/ \\d+ XP$/.test((l.textContent || '').trim()));
+        const label = document.querySelector('[data-xp-label]');
+        const bar = document.querySelector('[data-xp-bar]');
+        if (!label || !bar) return false;
+        const l = label.getBoundingClientRect();
+        const b = bar.getBoundingClientRect();
+        return (
+          getComputedStyle(label).backgroundColor === 'rgba(0, 0, 0, 0)' &&
+          /^\\d+ \\/ \\d+ XP$/.test((label.textContent || '').trim()) &&
+          Math.abs((l.left + l.right) / 2 - (b.left + b.right) / 2) <= 2
+        );
       })()`),
       true,
     );
-    // ---------- 8b. 窄屏（360px）下状态栏不挤压/不溢出（用户要求） ----------
+    // ---------- 8b. 窄屏（360px）下三个组件不被挤压/不溢出 ----------
     await cdp.send('Emulation.setDeviceMetricsOverride', {
       width: 360,
       height: 740,
@@ -972,27 +997,28 @@ async function main() {
     await sleep(700);
     const narrow = await cdp.evaluate(`(() => {
       const entry = document.querySelector('[data-growth-entry]');
-      const frames = [...entry.querySelectorAll('[data-pixel-frame]')];
+      const avatarFrame = entry.querySelector('[data-avatar-frame]');
       const img = entry.querySelector('[data-avatar-img]');
+      const badge = entry.querySelector('[data-level-badge]');
       const bar = entry.querySelector('[data-xp-bar]');
       const label = entry.querySelector('[data-xp-label]');
       const r = (el) => el.getBoundingClientRect();
-      const b = bar ? r(bar) : null;
-      const l = label ? r(label) : null;
+      const b = r(bar);
+      const l = r(label);
       return {
         overflow: document.documentElement.scrollWidth - window.innerWidth,
-        avatarW: img ? Math.round(r(img).width) : 0,
-        barW: b ? Math.round(b.width) : 0,
-        labelFits: Boolean(b && l && l.width <= b.width + 1),
-        alignTop: frames.length >= 2 ? Math.abs(r(frames[0]).top - r(frames[1]).top) : 99,
+        avatarW: Math.round(r(img).width),
+        barW: Math.round(b.width),
+        labelFits: l.width <= b.width + 1,
+        equalTops: Math.abs(r(avatarFrame).top - r(badge).top) <= 1 && Math.abs(r(badge).top - b.top) <= 1,
       };
     })()`);
     console.log(`      窄屏 360px：${JSON.stringify(narrow)}`);
     check('窄屏无横向溢出', Number(narrow.overflow) <= 1, true);
-    check('窄屏头像未被挤小（≥ 32px）', Number(narrow.avatarW) >= 32, true);
-    check('窄屏经验条仍有可用宽度（≥ 80px）', Number(narrow.barW) >= 80, true);
+    check('窄屏头像未被挤小（≥ 24px）', Number(narrow.avatarW) >= 24, true);
+    check('窄屏 XP 条仍有可用宽度（≥ 80px）', Number(narrow.barW) >= 80, true);
     check('窄屏 XP 文字仍在条内', narrow.labelFits === true, true);
-    check('窄屏头像框与经验条框仍顶部对齐', Number(narrow.alignTop) <= 1, true);
+    check('窄屏三组件仍顶部对齐', narrow.equalTops === true, true);
     await cdp.shot('20-header-narrow-360');
     await cdp.send('Emulation.clearDeviceMetricsOverride');
     await sleep(500);
