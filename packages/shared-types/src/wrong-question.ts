@@ -13,6 +13,51 @@
 export const WRONG_QUESTION_SUBJECTS = ['chinese', 'math', 'english', 'olympiad', 'pet'] as const;
 export type WrongQuestionSubject = (typeof WRONG_QUESTION_SUBJECTS)[number];
 
+/** 作答状态（用户 2026-10-06 指定：不会做 / 做错了）→ 存 mistakeStatus */
+export const ASSIGNMENT_STATUSES = [
+  { value: 'not_attempted', label: '不会做' },
+  { value: 'wrong_attempt', label: '做错了' },
+] as const;
+
+/**
+ * 错因（用户 2026-10-06 指定：**分学科**选项）→ 存 errorType
+ *  数学 / 奥数：粗心失误 · 思路偏差 · 未掌握知识点 · 其他
+ *  语文 / 英语 / PET 英语：拼写错误 · 单词/词语不认识 · 未掌握知识点 · 其他
+ */
+export const MISTAKE_REASONS_MATH = ['粗心失误', '思路偏差', '未掌握知识点', '其他'] as const;
+export const MISTAKE_REASONS_LANGUAGE = ['拼写错误', '单词/词语不认识', '未掌握知识点', '其他'] as const;
+export function mistakeReasonsFor(subject?: string | null): readonly string[] {
+  return subject === 'math' || subject === 'olympiad' ? MISTAKE_REASONS_MATH : MISTAKE_REASONS_LANGUAGE;
+}
+
+/** 年级学期（三级下拉：学段 + 年级 + 上/下学期），默认「小学五年级上学期」 */
+export const GRADE_STAGES = ['小学', '初中', '高中', '大学'] as const;
+export type GradeStage = (typeof GRADE_STAGES)[number];
+export const GRADE_LABELS: Record<GradeStage, readonly string[]> = {
+  小学: ['一年级', '二年级', '三年级', '四年级', '五年级', '六年级'],
+  初中: ['初一', '初二', '初三'],
+  高中: ['高一', '高二', '高三'],
+  大学: ['大一', '大二', '大三', '大四'],
+};
+export const SEMESTERS = ['上学期', '下学期'] as const;
+export const DEFAULT_GRADE_STAGE: GradeStage = '小学';
+export const DEFAULT_GRADE_LABEL = '五年级';
+export const DEFAULT_SEMESTER = '上学期';
+export const DEFAULT_GRADE_SEMESTER = `${DEFAULT_GRADE_STAGE}${DEFAULT_GRADE_LABEL}${DEFAULT_SEMESTER}`;
+
+/** 把 "小学五年级上学期" 解析回三级下拉 */
+export function parseGradeSemester(value?: string | null): {
+  stage: GradeStage;
+  gradeLabel: string;
+  semester: string;
+} {
+  const text = value ?? '';
+  const stage = GRADE_STAGES.find((s) => text.startsWith(s)) ?? DEFAULT_GRADE_STAGE;
+  const gradeLabel = GRADE_LABELS[stage].find((g) => text.includes(g)) ?? GRADE_LABELS[stage][0];
+  const semester = SEMESTERS.find((s) => text.includes(s)) ?? DEFAULT_SEMESTER;
+  return { stage, gradeLabel, semester };
+}
+
 /** 错因状态（上游 mistakeStatus：not_attempted / wrong_attempt / unknown） */
 export const MISTAKE_STATUSES = ['not_attempted', 'wrong_attempt', 'unknown'] as const;
 export type MistakeStatus = (typeof MISTAKE_STATUSES)[number];

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Camera, Image as ImageIcon, Loader2, PenLine, Upload } from 'lucide-react';
 import { Panel } from '../components/ui/card';
 import { WrongQuestionNav } from '../components/wrong-question-nav';
+import { WrongQuestionForm } from '../components/wrong-question-form';
 import { aiApi, fileToDataUrl, mapAiFieldsToForm } from '../lib/api/ai';
 import { compressImage, filesApi } from '../lib/api/files';
 
@@ -25,9 +26,8 @@ interface CaptureProps {
  * 上传/识别（**同一个功能**，对照上游首页三个输入模式：UploadZone / TextInputZone / DirectTextEditor）
  *  · 入口 1：错题本 →「上传新题」（带四入口导航）
  *  · 入口 2：学习 →「AI 识别」（孩子直接搜题识题，同一套拍照/手输/识别）
- *  · 拍照上传：拖拽或选择图片（JPG/PNG）→ 压缩 → 上传 → AI 识题 → 进确认表单
- *  · AI 识别：直接输入题干文字 → AI 解析 → 进确认表单
- *  · 直接录入：不经过 AI，手工填写
+ *  · 拍照上传 / AI 识别：识别完成后**就地展开确认表单**（同一个 WrongQuestionForm）
+ *  · 直接录入：tab 下面**直接就是表单**（用户要求：不需要再点一次"开始手工录入"）
  * 另含上游的「屏幕截图」（getDisplayMedia；仅 https/localhost 可用）
  */
 export function WrongQuestionCapture({ variant = 'notebook' }: CaptureProps) {
@@ -40,19 +40,16 @@ export function WrongQuestionCapture({ variant = 'notebook' }: CaptureProps) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 识别成功后内嵌表单的预填（null = 还没识别） */
+  const [recognized, setRecognized] = useState<{
+    prefill: Record<string, unknown>;
+    knowledgePoints: string[];
+    imageKey: string | null;
+  } | null>(null);
 
   const status = useQuery({ queryKey: ['ai', 'status'], queryFn: () => aiApi.status() });
   const aiReady = status.data?.configured ?? false;
-
-  const goToForm = (
-    prefill: Record<string, unknown>,
-    knowledgePoints: string[],
-    imageKey: string | null,
-  ): void => {
-    navigate('/learning/wrong-questions/manual', {
-      state: { prefill, knowledgePoints, imageKey },
-    });
-  };
+  const saving = variant === 'ai' ? '/learning/wrong-questions' : '/learning/wrong-questions';
 
   const pickFile = async (picked: File): Promise<void> => {
     if (!picked.type.startsWith('image/')) {
@@ -60,6 +57,7 @@ export function WrongQuestionCapture({ variant = 'notebook' }: CaptureProps) {
       return;
     }
     setError(null);
+    setRecognized(null);
     const compressed = await compressImage(picked);
     setFile(compressed);
     setPreviewUrl(URL.createObjectURL(compressed));
@@ -80,18 +78,18 @@ export function WrongQuestionCapture({ variant = 'notebook' }: CaptureProps) {
         imageKey = uploaded.key;
         imageBase64 = await fileToDataUrl(file);
       }
-      const result = await aiApi.analyze(
-        mode === 'image' ? { imageBase64 } : { text },
-      );
+      const result = await aiApi.analyze(mode === 'image' ? { imageBase64 } : { text });
       const mapped = mapAiFieldsToForm(result.fields);
       const { knowledgePoints, ...prefill } = mapped;
-      goToForm({ ...prefill, imageKey }, knowledgePoints, imageKey);
+      // 识别成功 → 就地展开确认表单（用户仍可逐字段修改后再保存）
+      setRecognized({ prefill, knowledgePoints, imageKey });
+      setMode('direct');
     } catch (err) {
-      const message = err instanceof Error ? err.message : '解析失败';
+      const message = err instanceof Error ? err.message : '识别失败';
       setError(
         message.includes('ai_not_configured')
           ? 'AI 未配置：请在 .env 填 AI_BASE_URL / AI_MODEL（其余功能不受影响）'
-          : `解析失败：${message}`,
+          : `识别失败：${message}`,
       );
     } finally {
       setBusy(false);
@@ -162,7 +160,7 @@ export function WrongQuestionCapture({ variant = 'notebook' }: CaptureProps) {
           })}
         </div>
 
-        {!aiReady && (
+        {!aiReady && mode !== 'direct' && (
           <p data-ai-hint className="mt-2 border-2 border-warning bg-warning/10 px-2 py-1.5 text-[11px] font-bold text-ink">
             AI 未配置或未连通：仍可「直接录入」手工建错题（图片会正常保存）。
           </p>
@@ -192,11 +190,13 @@ export function WrongQuestionCapture({ variant = 'notebook' }: CaptureProps) {
                 <div className="space-y-2">
                   <img
                     src={previewUrl}
-                    alt="待解析的题目"
+                    alt="待识别的题目"
                     data-upload-preview
                     className="mx-auto max-h-56 border-2 border-ink object-contain"
                   />
-                  <p className="text-[11px] text-inkSoft">{file?.name}（已压缩 {(file?.size ?? 0) / 1024 | 0} KB）</p>
+                  <p className="text-[11px] text-inkSoft">
+                    {file?.name}（已压缩 {Math.round((file?.size ?? 0) / 1024)} KB）
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -229,7 +229,7 @@ export function WrongQuestionCapture({ variant = 'notebook' }: CaptureProps) {
                 className="inline-flex items-center gap-1.5 border-2 border-ink bg-accent px-4 py-2 text-xs font-extrabold text-white shadow-pixel active:translate-y-0.5 disabled:opacity-50"
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                {busy ? 'AI 解析中…' : '开始 AI 解析'}
+                {busy ? 'AI 识别中…' : '开始 AI 识别'}
               </button>
               <button
                 type="button"
@@ -242,10 +242,14 @@ export function WrongQuestionCapture({ variant = 'notebook' }: CaptureProps) {
               {file && (
                 <button
                   type="button"
-                  onClick={() => goToForm({}, [], null)}
+                  data-skip-ai
+                  onClick={() => {
+                    setRecognized({ prefill: {}, knowledgePoints: [], imageKey: null });
+                    setMode('direct');
+                  }}
                   className="border-2 border-ink bg-panel px-3 py-2 text-xs font-bold shadow-pixel"
                 >
-                  跳过 AI，直接手工录入
+                  跳过识别，直接手工录入
                 </button>
               )}
             </div>
@@ -270,21 +274,7 @@ export function WrongQuestionCapture({ variant = 'notebook' }: CaptureProps) {
               className="inline-flex items-center gap-1.5 border-2 border-ink bg-accent px-4 py-2 text-xs font-extrabold text-white shadow-pixel active:translate-y-0.5 disabled:opacity-50"
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              {busy ? 'AI 解析中…' : '开始 AI 解析'}
-            </button>
-          </div>
-        )}
-
-        {mode === 'direct' && (
-          <div className="mt-3 space-y-2">
-            <p className="text-xs text-inkSoft">不经过 AI，自己填写题干、答案、解析、知识点等全部字段。</p>
-            <button
-              type="button"
-              data-direct-entry
-              onClick={() => goToForm({}, [], null)}
-              className="border-2 border-ink bg-accent px-4 py-2 text-xs font-extrabold text-white shadow-pixel active:translate-y-0.5"
-            >
-              开始手工录入
+              {busy ? 'AI 识别中…' : '开始 AI 识别'}
             </button>
           </div>
         )}
@@ -300,15 +290,22 @@ export function WrongQuestionCapture({ variant = 'notebook' }: CaptureProps) {
         </p>
       </Panel>
 
-      <p className="text-center text-[11px] text-inkSoft">
-        {variant === 'notebook' ? (
-          <>
-            也可以 <Link to="/learning/wrong-questions" className="underline">直接查看错题本</Link>
-          </>
-        ) : (
-          <>识别后可以确认并存入错题本 —— 与「错题本 → 上传新题」是同一个功能</>
-        )}
-      </p>
+      {/* 直接录入 / 识别确认：**tab 下面直接就是需要填写的表单** */}
+      {mode === 'direct' && (
+        <div data-inline-form>
+          {recognized ? (
+            <p className="text-[11px] font-bold text-ok">
+              ✓ AI 识别完成，下面是识别结果，请核对后保存（知识点可一键变标签）
+            </p>
+          ) : null}
+          <WrongQuestionForm
+            prefill={recognized?.prefill}
+            knowledgePoints={recognized?.knowledgePoints}
+            imageKey={recognized?.imageKey ?? null}
+            onSaved={() => navigate(saving)}
+          />
+        </div>
+      )}
     </div>
   );
 }

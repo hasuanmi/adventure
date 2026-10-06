@@ -17,8 +17,8 @@ const MASTERY_COLORS: Record<MasteryLevel, string> = {
 };
 
 const MISTAKE_LABELS: Record<string, string> = {
-  not_attempted: '没有作答',
-  wrong_attempt: '作答错误',
+  not_attempted: '不会做',
+  wrong_attempt: '做错了',
   unknown: '不确定',
 };
 
@@ -156,9 +156,12 @@ export function WrongQuestionDetailPage() {
           <Field label="解析" value={q.analysis} />
           <Field label="学生的错误答案 / 过程" value={q.wrongAnswerText} />
           <Field label="错因分析" value={q.mistakeAnalysis} />
-          <Field label="错因状态" value={q.mistakeStatus ? MISTAKE_LABELS[q.mistakeStatus] ?? q.mistakeStatus : null} />
+          <Field
+            label="作答状态"
+            value={q.mistakeStatus ? (MISTAKE_LABELS[q.mistakeStatus] ?? q.mistakeStatus) : null}
+          />
+          <Field label="错因" value={q.errorType} />
           <Field label="年级学期" value={q.gradeSemester} />
-          <Field label="试卷" value={q.paperLevel} />
           {q.ocrText && <Field label="OCR 原文" value={q.ocrText} />}
           {q.geogebraCommands && <Field label="GeoGebra 命令" value={q.geogebraCommands} />}
         </div>

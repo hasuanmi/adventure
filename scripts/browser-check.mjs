@@ -1628,7 +1628,7 @@ async function main() {
       };
     })()`);
     console.log(`      上传页：${JSON.stringify(uploadUi)}`);
-    check('三个输入模式齐全（拍照上传/AI解题/直接录入）', uploadUi.tabs.join(',') === 'image,text,direct', true);
+    check('三个输入模式齐全（拍照上传/AI识别/直接录入）', uploadUi.tabs.join(',') === 'image,text,direct', true);
     check(
       '拖拽区文案与上游一致（AI 智能解析 / 拖拽图片到此处 / JPG、PNG）',
       uploadUi.zoneText.includes('AI 智能解析') &&
@@ -1652,12 +1652,69 @@ async function main() {
     check('选择图片后出现预览', await cdp.evaluate(`Boolean(document.querySelector('[data-upload-preview]'))`), true);
     await cdp.shot('31-upload-preview');
 
-    // 直接录入（不经 AI）→ 表单页
+    // 直接录入（不经 AI）→ **表单直接出现在 tab 下面**（用户要求：不用再点"开始手工录入"）
     await cdp.clickSelector('[data-upload-tab="direct"]');
-    await sleep(300);
-    await cdp.clickSelector('[data-direct-entry]');
-    await sleep(800);
-    check('「直接录入」进入手工表单', String(await cdp.evaluate('location.pathname')).endsWith('/manual'), true);
+    await sleep(400);
+    const inline = await cdp.evaluate(`(() => {
+      const box = document.querySelector('[data-inline-form]');
+      return {
+        hasBox: Boolean(box),
+        hasForm: Boolean(box?.querySelector('[data-save-wrong-question]')),
+        path: location.pathname,
+      };
+    })()`);
+    console.log(`      直接录入：${JSON.stringify(inline)}`);
+    check('「直接录入」下面直接就是表单', inline.hasBox && inline.hasForm, true);
+    check('不再跳转到独立录入页', inline.path.endsWith('/new'), true);
+
+    // 表单字段按用户要求调整过
+    const formUi = await cdp.evaluate(`(() => {
+      const text = String(document.body.innerText);
+      const opts = (sel) => [...document.querySelectorAll(sel + ' option')].map((o) => o.textContent.trim());
+      return {
+        status: opts('select[name="mistakeStatus"]'),
+        reason: opts('select[name="errorType"]'),
+        gradeSelects: document.querySelectorAll('[data-grade-selects] select').length,
+        gradeValues: [...document.querySelectorAll('[data-grade-selects] select')].map((s) => s.value),
+        gradeText: (document.body.innerText.match(/当前：([^\\n]+)/) ?? [])[1] ?? '',
+        hasPaper: Boolean(document.querySelector('select[name="paperLevel"]')) || text.includes('试卷'),
+        hasErrorType: text.includes('错误类型'),
+        hasLegacyNote: text.includes('图片上传（拍照录题）在下一批实现'),
+      };
+    })()`);
+    console.log(`      表单字段：${JSON.stringify(formUi)}`);
+    check('作答状态选项为「不会做 / 做错了」', formUi.status.join(',') === '不会做,做错了', true);
+    check(
+      '数学的错因选项正确（粗心失误/思路偏差/未掌握知识点/其他）',
+      formUi.reason.slice(1).join(',') === '粗心失误,思路偏差,未掌握知识点,其他',
+      true,
+    );
+    check('年级学期为三级下拉（学段/年级/学期）', Number(formUi.gradeSelects), 3);
+    check(
+      '年级学期默认「小学五年级上学期」',
+      formUi.gradeValues.join('') === '小学五年级上学期' && String(formUi.gradeText).includes('小学五年级上学期'),
+      true,
+    );
+    check('已删除「试卷」', formUi.hasPaper, false);
+    check('已删除「错误类型」', formUi.hasErrorType, false);
+    check('已删除"图片上传在下一批…"注释', formUi.hasLegacyNote, false);
+
+    // 切换学科 → 错因选项随之变为语言类
+    await cdp.evaluate(`(() => {
+      const el = document.querySelector('select[name="subject"]');
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, 'chinese');
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    await sleep(400);
+    const langReasons = await cdp.evaluate(
+      `[...document.querySelectorAll('select[name="errorType"] option')].map((o) => o.textContent.trim())`,
+    );
+    check(
+      '语文/英语/PET 的错因选项正确（拼写错误/单词·词语不认识/未掌握知识点/其他）',
+      langReasons.slice(1).join(',') === '拼写错误,单词/词语不认识,未掌握知识点,其他',
+      true,
+    );
+    await cdp.shot('35-direct-entry-form');
 
     // 标签管理：新建 + 删除自定义标签
     await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions/tags` });
