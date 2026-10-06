@@ -104,13 +104,17 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
   }
 
   return (
-    <Panel className={cn('relative overflow-hidden', expanded && 'bg-panelLight')}>
-      {/* 素材外框（Kenney UI pack, CC0）：Thick outline tile_0072-0075 四角件 */}
-      <img src="/ui/frame-tl.png" alt="" aria-hidden className="pointer-events-none absolute left-0 top-0 z-20 h-6 w-6 [image-rendering:pixelated]" />
-      <img src="/ui/frame-tr.png" alt="" aria-hidden className="pointer-events-none absolute right-0 top-0 z-20 h-6 w-6 [image-rendering:pixelated]" />
-      <img src="/ui/frame-bl.png" alt="" aria-hidden className="pointer-events-none absolute bottom-0 left-0 z-20 h-6 w-6 [image-rendering:pixelated]" />
-      <img src="/ui/frame-br.png" alt="" aria-hidden className="pointer-events-none absolute bottom-0 right-0 z-20 h-6 w-6 [image-rendering:pixelated]" />
-      <button
+    <Panel
+      className={cn('relative overflow-hidden', expanded && 'bg-panelLight')}
+      style={{
+        borderWidth: 10,
+        borderStyle: 'solid',
+        borderColor: 'transparent',
+        borderImageSource: 'url(/ui/frame-panel.png)',
+        borderImageSlice: 10,
+        borderImageRepeat: 'stretch',
+      }}
+    >      <button
         type="button"
         data-task-card-toggle
         onClick={() => setExpanded((v) => !v)}
@@ -152,8 +156,17 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
         <span
           data-task-done-box
           aria-hidden
+          style={{
+            borderWidth: 5,
+            borderStyle: 'solid',
+            borderColor: 'transparent',
+            borderImageSource: 'url(/ui/frame-panel.png)',
+            borderImageSlice: 10,
+            borderImageRepeat: 'stretch',
+            backgroundColor: task.status === 'completed' ? 'var(--ok)' : 'var(--panel-light)',
+          }}
           className={cn(
-            'grid h-7 w-7 shrink-0 place-items-center border-2 border-ink',
+            'grid h-8 w-8 shrink-0 place-items-center',
             task.status === 'completed' ? 'bg-ok text-white' : 'bg-panelLight',
           )}
         >
