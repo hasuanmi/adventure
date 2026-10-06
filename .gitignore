@@ -45,3 +45,9 @@ pnpm-debug.log*
 .idea/
 .vscode/
 Thumbs.db
+# 浏览器检查/预览截图（scripts/browser-check.mjs）
+ui-shots*/
+
+# Python 构建脚本缓存（visualasset/build_icons.py）
+__pycache__/
+*.pyc
