@@ -185,3 +185,52 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .pixel-blink { animation: none; }
 }
+
+/* ============================================================================
+   统一 Pixel 边框规则（2026-10-06 用户要求，供 TaskCard / 打卡徽章 / 今日冒险面板 /
+   新建任务按钮 / 每日成长卡 复用；后续新组件**不要**再各写一套像素边框）
+     · 外层：深棕 3px 实线
+     · 内层：浅色 2px 内描边（inset 3px）
+     · 阴影：右下方向**硬阴影**（0 模糊）
+     · 不使用圆角、不使用柔和 box-shadow
+   用法：<div class="pixel-frame"> … </div>（需要强调色时再加 pixel-frame-accent）
+   ========================================================================== */
+.pixel-frame {
+  position: relative;
+  border: 3px solid var(--ink);
+  background: var(--panel);
+  box-shadow: 3px 3px 0 0 var(--ink);
+}
+.pixel-frame::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 2px solid rgb(var(--ink-rgb, 74 51 38) / 0.35);
+  pointer-events: none;
+}
+/* 强调色版本（主按钮/奖励入口）：外层用强调色，阴影仍为深棕硬阴影 */
+.pixel-frame-accent {
+  border-color: var(--accent);
+}
+/* 右下硬阴影的方向与大小可覆盖（例如紧凑卡片用 2px） */
+.pixel-frame-sm {
+  box-shadow: 2px 2px 0 0 var(--ink);
+}
+/* 缺角/像素转角装饰：四角各一枚 6px 方块（像素风转角） */
+.pixel-notch::before,
+.pixel-notch::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.pixel-notch::before {
+  left: -3px;
+  top: -3px;
+}
+.pixel-notch::after {
+  right: -3px;
+  bottom: -3px;
+}
