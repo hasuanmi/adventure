@@ -11,7 +11,7 @@ import { rewardProfilesApi } from '../../lib/api/reward-profiles';
 import { taskFormSchema, type TaskFormValues } from '../../lib/task-form-schema';
 import { toDateInputValue, toLocalInputValue, defaultTaskSlot, endAtFromStart } from '../../lib/schedule';
 import {
-  rewardProfileIconUrl,
+  categoryIconUrl,
 } from '../../lib/quest-icons';
 import { TASK_ICONS } from '../../lib/task-icons';
 import { useUser } from '../../hooks/use-user';
@@ -135,6 +135,9 @@ function TaskCreateSheetForm({
   useEffect(() => setSubmitError(null), [task?.id]);
 
   const profiles = profilesQuery.data?.profiles ?? [];
+  // 图标按「类型分类」取，保证每类各不相同且只画一个
+  const selectedCategory =
+    profiles.find((p) => p.code === (form.watch('rewardProfile') || 'TYPE_DAILY'))?.category ?? 'daily';
   const members = familyQuery.data?.members ?? [];
   const parentOptions = members.filter((m) => m.role === 'parent' || m.role === 'teacher');
   const childOptions = members.filter((m) => m.role === 'child');
@@ -367,7 +370,7 @@ function TaskCreateSheetForm({
                 <SelectTrigger>
                   <span className="flex items-center gap-2">
                     <img
-                      src={rewardProfileIconUrl(form.watch('rewardProfile') || 'TYPE_DAILY')}
+                      src={categoryIconUrl(selectedCategory)}
                       alt=""
                       aria-hidden
                       className="h-5 w-5 [image-rendering:pixelated]"
@@ -380,7 +383,7 @@ function TaskCreateSheetForm({
                     <SelectItem key={p.code} value={p.code}>
                       <span className="flex items-center gap-2">
                         <img
-                          src={rewardProfileIconUrl(p.code)}
+                          src={categoryIconUrl(p.category)}
                           alt=""
                           aria-hidden
                           className="h-4 w-4 [image-rendering:pixelated]"
