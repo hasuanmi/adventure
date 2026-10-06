@@ -7,6 +7,7 @@ import {
 } from '@huahua/shared-types';
 import { Panel, PanelHeader } from '../components/ui/card';
 import { PixelBar } from '../components/ui/pixel-bar';
+import { Link } from 'react-router-dom';
 import { Skeleton } from '../components/ui/skeleton';
 import { Empty } from '../components/ui/empty';
 import { WeekCheckin } from '../components/week-checkin';
@@ -137,7 +138,14 @@ export function GrowthPage() {
       </Panel>
 
       {/* 本周打卡（与今日页同一组件/同一数据源） */}
-      <WeekCheckin />
+<WeekCheckin />
+      {/* 查看成长记录：放在「本周打卡」下方（用户要求：只加在这个位置） */}
+      <Link
+        to="/growth-cards"
+        className="mt-2 inline-block text-xs font-bold text-inkSoft underline"
+      >
+        查看成长记录 →
+      </Link>
 
       {/* 奖励流水 */}
       <Panel>

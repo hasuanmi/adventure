@@ -242,8 +242,8 @@ body {
    外层深棕细线 + 内层浅色细线 + 金色填充 + **无硬阴影**（扁平、贴近参考图） */
 .pixel-frame-flat {
   position: relative;
-  border: 2px solid var(--gold-dark);
-  background: var(--gold);
+  border: 2px solid var(--ink);
+  background: var(--accent);
 }
 .pixel-frame-flat::after {
   content: '';
