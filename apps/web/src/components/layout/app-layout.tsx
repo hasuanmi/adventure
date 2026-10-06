@@ -2,6 +2,7 @@ import { BookOpen, CalendarDays, Home, LogOut, Users } from 'lucide-react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { levelProgressFromXp } from '@huahua/shared-types';
+import { PlayerHud } from './player-hud';
 import { cn } from '../../lib/utils';
 import { useUser } from '../../hooks/use-user';
 import { authApi } from '../../lib/api/auth';
@@ -73,74 +74,19 @@ export function AppLayout({
       {variant === 'default' && (
       <header className="shrink-0 border-b-4 border-ink bg-ink text-panelLight">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
-          {/* 左上角顶部信息栏（2026-10-06 按用户订正的第二版结构）：
-              **高头像 + 低状态条** —— 头像保持现有尺寸；【等级+XP】整体缩到约一半高度（h-5 = 20px，
-              头像框 36px ≈ 55%），`items-end` 让**状态条底部与头像框底部对齐**（不是垂直居中）。
-              等级框与 XP 条**直接相连**：无间距 + 边框重叠 2px → 一条缝，视为同一个连续组件；
-              两者各自有边框，**外面不加任何大框**。日期与累计 XP 在整个组件下方。 */}
-          <Link
-            to="/growth"
-            data-growth-entry
-            aria-label="我的成长"
-            title="我的成长"
-            className="flex min-w-0 flex-1 flex-col gap-1 transition active:translate-y-0.5"
-          >
-            <span className="flex min-w-0 items-end gap-1.5">
-              {/* 1) 头像框：保持现有尺寸，独立小框（内边距 2px，贴身） */}
-              <span
-                data-avatar-frame
-                className="shrink-0 border-2 border-ink bg-panelLight p-0.5"
-              >
-                <img
-                  data-avatar-img
-                  src="/avatar-girl-toon.png"
-                  alt=""
-                  aria-hidden
-                  className="block h-7 w-7 object-contain"
-                />
-              </span>
-
-              {/* 2)【等级 + XP】连续组件：低矮（约头像一半高），底部与头像平齐 */}
-              <span data-status-group className="flex min-w-0 flex-1 items-stretch">
-                <span
-                  data-level-badge
-                  className="grid h-5 w-5 shrink-0 place-items-center border-2 border-ink bg-accent text-[11px] font-extrabold leading-none text-white"
-                >
-                  {xpProgress ? xpProgress.level : '—'}
-                </span>
-                {/* -ml-0.5（-2px）：与等级框边框重叠 → 两框直接相连、共享一条 2px 缝 */}
-                <span
-                  data-xp-bar
-                  className="relative -ml-0.5 h-5 min-w-0 flex-1 overflow-hidden border-2 border-ink bg-panel"
-                >
-                  <span
-                    data-xp-fill
-                    aria-hidden
-                    className="absolute inset-y-0 left-0 bg-xp transition-all"
-                    style={{
-                      width: `${Math.round((xpProgress?.ratio ?? 0) * 100)}%`,
-                      boxShadow: 'inset 0 1px 0 var(--xp-light), inset 0 -1px 0 var(--xp-dark)',
-                    }}
-                  />
-                  {/* 文字叠加在**同一个平面**：绝对定位居中，无独立底色块 */}
-                  <span
-                    data-xp-label
-                    className="pointer-events-none absolute inset-0 grid place-items-center text-[10px] font-extrabold leading-none text-white"
-                    style={{
-                      textShadow:
-                        '1px 1px 0 #1a2438, -1px 1px 0 #1a2438, 1px -1px 0 #1a2438, -1px -1px 0 #1a2438',
-                    }}
-                  >
-                    {xpProgress ? `${xpProgress.current} / ${xpProgress.needed} XP` : '— XP'}
-                  </span>
-                </span>
-              </span>
-            </span>
-            {/* 日期与累计 XP：整行下方 */}
-            <span className="block truncate text-[10px] text-panelLight/70">
-              {dateLabel} · 累计 {xp} XP
-            </span>
+          {/* 顶部 Player HUD（RPG 角色头像牌）：圆形头像 + 圆形素材装饰框 + 左上压框 LV + 右上昵称 + 下方 XP 进度条。
+              首页**不显示任何 XP 数字**；点击整个 HUD → /growth 角色详情（详情里才看 XP 数值与成长信息）。
+              构图与约束见 components/layout/player-hud.tsx 顶部注释。 */}
+          <Link to="/growth" data-growth-entry aria-label="我的成长" title="我的成长" className="shrink-0">
+            <PlayerHud
+              avatarUrl="/avatar-girl-toon.png"
+              level={xpProgress ? xpProgress.level : 1}
+              xpInLevel={xpProgress?.current ?? 0}
+              xpNeed={xpProgress?.needed ?? 0}
+              nickname={user?.username ?? '小冒险家'}
+            />
           </Link>
+          <span className="min-w-0 flex-1 truncate text-[10px] text-panelLight/70">{dateLabel}</span>
           <div className="flex shrink-0 items-center gap-2 text-xs">
             {user ? (
               <>
