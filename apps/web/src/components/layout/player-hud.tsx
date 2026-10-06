@@ -44,18 +44,19 @@ export function PlayerHud({
       data-player-hud
       data-hud-level={level}
       data-hud-xp-percent={pct}
-      className={cn('relative flex items-end', onClick && 'cursor-pointer transition active:translate-y-0.5', className)}
+      className={cn('relative flex flex-col items-start', onClick && 'cursor-pointer transition active:translate-y-0.5', className)}
     >
       {/* 昵称：头像右上区域 */}
       <span
-        className="absolute right-6 top-0.5 z-30 max-w-[8rem] truncate text-[17px] font-extrabold leading-none tracking-wide text-panelLight"
+        className="mb-0.5 max-w-[10rem] truncate text-[17px] font-extrabold leading-none tracking-wide text-panelLight"
         data-hud-nickname
         style={{ textShadow: '1px 1px 0 rgba(0,0,0,0.35)' }}
       >
         {nickname}
       </span>
 
-      {/* 圆形头像 + 圆形像素装饰框（CSS 多层圆边） */}
+      {/* 头像 + 经验条同一行 */}
+      <span className="flex items-end">
       <span className="relative z-10 block h-14 w-14 shrink-0" data-hud-avatar-frame>
         <img
           src={avatarUrl}
@@ -84,6 +85,7 @@ export function PlayerHud({
           className="block h-full bg-xp transition-[width] duration-500"
           style={{ width: `${pct}%` }}
         />
+      </span>
       </span>
     </Tag>
   );
