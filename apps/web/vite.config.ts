@@ -19,6 +19,17 @@ export default defineConfig({
       },
     },
   },
+  // 预览生产构建（本地看真实产物 / CI 里给 browser-check 提供静态服务）。
+  // 注意：preview 不会像 nginx 那样自动带 /api 反代，必须显式配置。
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': {
+        target: proxyTarget,
+        changeOrigin: true,
+      },
+    },
+  },
   // workspace 包（shared-types）编译为 CJS 且不在 node_modules 内，
   // 需纳入 commonjs 转换才能让 rollup 识别其 __exportStar 具名导出
   build: {

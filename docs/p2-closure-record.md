@@ -256,7 +256,7 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 
 - 冒烟脚本已补 CORS 预检与空家庭路径；错误体已纳入契约；
 - UI 交互改用 `scripts/browser-check.mjs` 验证；
-- **待办**：把 browser-check 接进 CI（ubuntu runner 自带 Chrome；需要额外起 web 静态服务），目前仅本地手动跑。
+- **已接入 CI**：`ci.yml` 的 `smoke` job 在 API 冒烟之后追加 `Build Web → vite preview(4173) → browser-check → 上传截图 artifact`（ubuntu runner 自带 Chrome；preview 已配 `/api` 代理；脚本在 Linux 下加 `--no-sandbox`）。本地已用同一路径验证通过（14/14）。
 
 ### 11.5 待用户确认（未擅自改动）
 

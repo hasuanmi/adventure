@@ -224,6 +224,9 @@ async function main() {
   const browser = spawn(exe, [
     '--headless=new',
     '--disable-gpu',
+    // CI（Linux root 容器）下必须关沙箱；本地 Windows 会忽略该参数
+    '--no-sandbox',
+    '--disable-dev-shm-usage',
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${profile}`,
     '--no-first-run',

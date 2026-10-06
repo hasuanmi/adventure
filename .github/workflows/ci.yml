@@ -108,9 +108,38 @@ jobs:
           exit 1
       - name: Install psql client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
-      - name: "Smoke test (38 assertions: family, approval, multi-tenant, guards)"
+      - name: "Smoke test (API: family, approval, multi-tenant, guards, CORS)"
         shell: pwsh
         run: ./scripts/p2-smoke.ps1
-      - name: API log on failure
+      # UI 回归门：P2 阶段三次回归（CORS 配错、脚本静默丢断言、"以为修好"的会话恢复）
+      # 都是 typecheck/build/API 冒烟覆盖不到的纯前端问题，故用真实浏览器点一遍。
+      - name: Build Web
+        run: pnpm --filter @huahua/web build
+      - name: Start Web preview (serves dist, proxies /api)
+        run: |
+          # 必须在 apps/web 作为项目根启动：从仓库根运行 vite preview 会找不到 apps/web/dist
+          pnpm --filter @huahua/web preview --port 4173 > /tmp/web.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4173/ > /dev/null; then
+              echo "Web preview is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Web preview did not start"
+          cat /tmp/web.log
+          exit 1
+      - name: Browser UI check (headless Chrome, real clicks + assertions)
+        env:
+          PSQL: psql
+        run: node scripts/browser-check.mjs --base http://localhost:4173 --out /tmp/ui-shots
+      - name: Upload UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-shots
+          path: /tmp/ui-shots
+          if-no-files-found: ignore
+      - name: API / web log on failure
         if: failure()
-        run: cat /tmp/api.log || true
+        run: cat /tmp/api.log /tmp/web.log || true
