@@ -13,12 +13,13 @@ export interface GrowthCardEntryProps {
 /**
  * 「每日打卡 → 今日成长卡」入口（2026-10-06 用户重设计为**圆形像素徽章**）：
  *
- *  · 视觉中心 = **圆形像素徽章**（圆形描边 + 四角像素转角 + 硬像素阴影 + 中心宝箱图标）
- *    —— 不是横向矩形按钮，也不是现代圆角/胶囊组件；
- *  · 右侧文字：主标题「每日成长卡」 + 副信息「完成今日冒险后领取」；已领取 → 「✓ 今日已领取」；
- *  · 点击徽章/整块 → 打开今日成长卡（领取逻辑、数据结构、路由均未改动）；
- *  · **不是考勤**：不出现签退/打卡时间/打卡成功/考勤等表达；
- *  · 父级是深色 HUD 面板，所以文字用浅色、徽章用米色底（对比清晰）。
+ *  · 视觉中心 = **圆形像素徽章**，徽章**居中**，标签「每日成长卡」写在徽章**下方**；
+ *  · 徽章外围 = **放射状散射光**（自绘像素放射线素材 ui/badge-rays.png，缓慢旋转）；
+ *    不再使用四角小像素点（用户反馈：不要那些小点）；
+ *  · 状态：未领取 → 米色徽章 + 「完成今日冒险后领取」；已领取 → 徽章转低饱和绿 + 右下像素勾
+ *    + 「✓ 今日已领取」+「查看今日成长记录 →」；
+ *  · 点击徽章 → 打开今日成长卡（领取逻辑、数据结构、路由均未改动）；
+ *  · **不是考勤**：不出现签退/打卡时间/打卡成功/考勤等表达。
  */
 export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
   const [open, setOpen] = useState(false);
@@ -35,64 +36,61 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
 
   return (
     <>
-      <button
-        type="button"
-        data-growth-card-entry
-        data-growth-card-claimed={claimed ? 'true' : 'false'}
-        onClick={() => setOpen(true)}
-        className="mt-3 flex w-full items-center gap-3 text-left transition active:translate-y-1"
-      >
-        {/* 圆形像素徽章：中心视觉 + 圆周像素转角 + 硬阴影 */}
-        <span
-          data-growth-card-badge
-          className={cn(
-            'relative grid h-14 w-14 shrink-0 place-items-center rounded-full border-[3px] shadow-pixel',
-            claimed ? 'border-ink bg-ok/25' : 'border-ink bg-panelLight',
-          )}
+      <div className="mt-3 flex flex-col items-center">
+        <button
+          type="button"
+          data-growth-card-entry
+          data-growth-card-claimed={claimed ? 'true' : 'false'}
+          onClick={() => setOpen(true)}
+          className="group relative grid place-items-center transition active:translate-y-1"
+          aria-label={claimed ? '今日成长卡已领取，查看成长卡' : '领取今日成长卡'}
         >
+          {/* 放射状散射光（像素素材，缓慢旋转；纯装饰，不参与点击） */}
           <img
-            src="/icons/chest.png"
+            src="/ui/badge-rays.png"
             alt=""
             aria-hidden
-            className="h-8 w-8 [image-rendering:pixelated]"
+            data-growth-card-rays
+            className="pointer-events-none absolute h-28 w-28 [image-rendering:pixelated] motion-safe:animate-[spin_14s_linear_infinite]"
           />
-          {/* 四角像素转角（保留像素风缺角装饰） */}
-          <span aria-hidden className="absolute -left-1 -top-1 h-1.5 w-1.5 bg-accent" />
-          <span aria-hidden className="absolute -right-1 -top-1 h-1.5 w-1.5 bg-accent" />
-          <span aria-hidden className="absolute -bottom-1 -left-1 h-1.5 w-1.5 bg-accent" />
-          <span aria-hidden className="absolute -bottom-1 -right-1 h-1.5 w-1.5 bg-accent" />
-          {/* 已领取：徽章上盖一枚像素勾 */}
-          {claimed && (
-            <span
-              data-growth-card-badge-check
-              className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center border-2 border-ink bg-ok text-[11px] font-extrabold leading-none text-white"
-            >
-              ✓
-            </span>
-          )}
-        </span>
 
-        {/* 右侧信息：主标题 + 副信息（不是按钮、不是胶囊） */}
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-extrabold text-panelLight">每日成长卡</span>
-          <span className="block truncate text-[11px] text-panelLight/75">
-            {claimed ? '✓ 今日已领取' : '完成今日冒险后领取'}
+          {/* 圆形像素徽章（居中主体） */}
+          <span
+            data-growth-card-badge
+            className={cn(
+              'relative grid h-14 w-14 place-items-center rounded-full border-[3px] border-ink shadow-pixel',
+              claimed ? 'bg-ok/30' : 'bg-panelLight',
+            )}
+          >
+            <img
+              src="/icons/chest.png"
+              alt=""
+              aria-hidden
+              className="h-8 w-8 [image-rendering:pixelated]"
+            />
+            {claimed && (
+              <span
+                data-growth-card-badge-check
+                className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center border-2 border-ink bg-ok text-[11px] font-extrabold leading-none text-white"
+              >
+                ✓
+              </span>
+            )}
           </span>
+        </button>
+
+        {/* 标签：写在徽章**下方**，整体居中 */}
+        <span className="mt-1.5 text-sm font-extrabold text-panelLight">每日成长卡</span>
+        <span className="text-[11px] text-panelLight/75">
+          {claimed ? '✓ 今日已领取' : '完成今日冒险后领取'}
         </span>
 
-        <span className="shrink-0 text-base font-extrabold text-accent" aria-hidden>
-          {claimed ? '' : '→'}
-        </span>
-      </button>
-
-      {claimed && (
-        <Link
-          to="/growth-cards"
-          className="mt-1 block pl-[4.25rem] text-left text-[11px] font-bold text-panelLight/80 underline"
-        >
-          查看今日成长记录 →
-        </Link>
-      )}
+        {claimed && (
+          <Link to="/growth-cards" className="mt-0.5 text-[11px] font-bold text-panelLight/80 underline">
+            查看今日成长记录 →
+          </Link>
+        )}
+      </div>
 
       <GrowthCardModal
         date={date || new Date().toISOString().slice(0, 10)}
