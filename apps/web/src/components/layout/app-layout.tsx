@@ -146,7 +146,7 @@ export function AppLayout({
             data-app-nav
             // 列数跟随 nav 长度（加第三格「学习」时不能写死 2 列，否则第三格会掉到第二行）
             style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}
-            className="mx-auto grid w-full max-w-md gap-1 border-2 border-ink bg-ink p-1.5 shadow-pixel md:max-w-2xl"
+            className="pixel-frame-flat mx-auto grid w-full max-w-md gap-1 p-1.5 md:max-w-2xl"
           >
             {nav.map((item) => (
               <NavLink
@@ -156,7 +156,7 @@ export function AppLayout({
                 className={({ isActive }) =>
                   cn(
                     'flex flex-col items-center gap-0.5 py-1.5 text-xs',
-                    isActive ? 'bg-accent text-white shadow-pixel' : 'text-panelLight hover:bg-panel/10',
+                    isActive ? 'bg-ink text-panelLight' : 'text-ink/75 hover:bg-white/25',
                   )
                 }
               >
