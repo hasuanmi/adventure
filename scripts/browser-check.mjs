@@ -962,7 +962,19 @@ async function main() {
       `(() => { const i = document.querySelector('[data-avatar-img]'); return i ? i.naturalWidth : 0; })()`,
     );
     check('表头头像可加载（/avatar-girl.png 存在且可访问）', Number(avatarWidth) > 0, true);
-    check('底部导航仍为 2 格（成长不占导航）', await cdp.evaluate(`document.querySelectorAll('nav a').length`), 2);
+    const navLabels = await cdp.evaluate(
+      `[...document.querySelectorAll('nav a')].map((a) => (a.textContent || '').trim())`,
+    );
+    check('底部导航为 今日|日程|学习 三格', navLabels.join(',') === '今日,日程,学习', true);
+    check('成长不进底部导航（仍走表头入口）', navLabels.some((l) => l.includes('成长')), false);
+    // 三格必须在同一行（曾因写死 grid-cols-2 导致第三格换行）
+    check(
+      '三格导航在同一行（无换行）',
+      await cdp.evaluate(
+        `(() => { const tops = [...document.querySelectorAll('[data-app-nav] a')].map((a) => Math.round(a.getBoundingClientRect().top)); return new Set(tops).size; })()`,
+      ),
+      1,
+    );
     await cdp.shot('10-header-growth-entry');
 
     await cdp.clickSelector('[data-growth-entry]');
@@ -1431,6 +1443,117 @@ async function main() {
     check('成长记录页列出已领取的卡片', Number(record.count) >= 1 && record.hasImg === true, true);
     check('成长记录页无考勤措辞', record.hasAttendanceWord.length, 0);
     await cdp.shot('27-growth-cards');
+
+    // ---------- 13g. 学习第三格 + 错题本闭环（P6-1，对照上游 wrong-notebook） ----------
+    const navTabs = await cdp.evaluate(
+      `[...document.querySelectorAll('nav a')].map((a) => (a.textContent || '').trim())`,
+    );
+    check('底部导航变为 3 格且含「学习」', navTabs.length === 3 && navTabs.some((t) => t.includes('学习')), true);
+    await cdp.send('Page.navigate', { url: `${BASE}/learning` });
+    await cdp.waitFor('[data-learning-entry="wrong-questions"]');
+    const hub = await cdp.evaluate(`(() => ({
+      wrongQuestions: Boolean(document.querySelector('[data-learning-entry="wrong-questions"]')),
+      aiTutor: Boolean(document.querySelector('[data-learning-entry="ai-tutor"]')),
+      text: String(document.body.innerText).replace(/\\n/g, ' | ').slice(0, 120),
+    }))()`);
+    console.log(`      学习中心：${JSON.stringify(hub)}`);
+    check('学习中心含「错题本」入口', hub.wrongQuestions, true);
+    check('学习中心含「AI 解题」入口', hub.aiTutor, true);
+
+    // 录入一道错题（UI 全流程）
+    await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions/new` });
+    await cdp.waitFor('[data-save-wrong-question]');
+    const wqText = `勾股定理测试题 ${STAMP}：直角三角形两直角边 3 和 4，求斜边`;
+    await cdp.evaluate(`(() => {
+      const set = (sel, val) => {
+        const el = document.querySelector(sel);
+        if (!el) return;
+        // 用元素自身的原型取 value setter（input/textarea/select 通用，避免 Illegal invocation）
+        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, val);
+        el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
+      };
+      set('textarea[name="questionText"]', ${JSON.stringify(wqText)});
+      set('textarea[name="answerText"]', '5');
+      set('textarea[name="analysis"]', '3²+4²=9+16=25，斜边为 5');
+      set('textarea[name="mistakeAnalysis"]', '忘了开平方');
+      set('input[name="source"]', '期中考试');
+      set('input[name="errorType"]', '计算');
+      set('select[name="subject"]', 'math');
+    })()`);
+    await sleep(300);
+    // 新建自定义知识点标签并选中（上游自定义标签能力）
+    await cdp.evaluate(`(() => {
+      const input = document.querySelector('[data-new-tag]');
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value').set.call(input, '勾股定理');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    await cdp.clickSelector('[data-add-tag]');
+    await sleep(900);
+    const tagCreated = await cdp.evaluate(`document.querySelectorAll('[data-tag-option]').length`);
+    check('可新建并选中自定义知识点标签', Number(tagCreated) >= 1, true);
+    await cdp.clickSelector('[data-save-wrong-question]');
+    await sleep(1600);
+    check('保存后回到错题列表', await cdp.evaluate('location.pathname'), '/learning/wrong-questions');
+    const listed = await cdp.evaluate(`(() => {
+      const cards = [...document.querySelectorAll('[data-wrong-question-card]')];
+      return { count: cards.length, first: (cards[0]?.innerText ?? '').replace(/\\n/g, ' | ').slice(0, 90) };
+    })()`);
+    console.log(`      错题列表：${JSON.stringify(listed)}`);
+    check('列表出现刚录入的错题', Number(listed.count) >= 1 && listed.first.includes('勾股定理'), true);
+    await cdp.shot('28-wrong-question-list');
+
+    // 上游去重规则：同题干 2 秒内重复提交 → 409 duplicate_question
+    const dupBody = { subject: 'math', questionText: wqText };
+    const dupWrong = await api('POST', '/wrong-questions', childToken, dupBody);
+    check('同题干短时间重复录入 → 409（上游 2 秒去重规则）', dupWrong.status, 409);
+    check('重复录入 reason 为 duplicate_question', dupWrong.json?.reason, 'duplicate_question');
+
+    // 详情页：掌握标记 + 复习记录 + 笔记
+    const firstId = await cdp.evaluate(
+      `document.querySelector('[data-wrong-question-card]')?.getAttribute('data-wrong-question-card')`,
+    );
+    await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions/${firstId}` });
+    await cdp.waitFor('[data-mastery-controls]');
+    const wqDetailText = String(await cdp.evaluate('document.body.innerText'));
+    check(
+      '详情页展示题干/答案/解析/错因',
+      ['勾股定理', '5', '斜边为 5', '忘了开平方'].every((t) => wqDetailText.includes(t)),
+      true,
+    );
+    await cdp.clickSelector('[data-mastery-option="1"]');
+    await sleep(1200);
+    check(
+      '掌握度可切换为「复习中」',
+      await cdp.evaluate(
+        `getComputedStyle(document.querySelector('[data-mastery-option="1"]')).backgroundColor !== 'rgba(0, 0, 0, 0)'`,
+      ),
+      true,
+    );
+    await cdp.clickSelector('[data-review-correct]');
+    await sleep(1200);
+    check('可记录一次复习结果', await cdp.evaluate(`document.body.innerText.includes('复习记录（1 次）')`), true);
+    await cdp.evaluate(`(() => {
+      const el = document.querySelector('[data-wrong-question-notes]');
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, '下次先画图再算');
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    await sleep(200);
+    await cdp.clickSelector('[data-save-notes]');
+    await sleep(1200);
+    await cdp.send('Page.navigate', { url: `${BASE}/learning/wrong-questions/${firstId}` });
+    await cdp.waitFor('[data-wrong-question-notes]');
+    await sleep(500);
+    const notesSaved = await cdp.evaluate(`document.querySelector('[data-wrong-question-notes]')?.value ?? ''`);
+    check('笔记可保存并回显', String(notesSaved).includes('下次先画图再算'), true);
+    await cdp.shot('29-wrong-question-detail');
+
+    // 删除（软删除）
+    await cdp.clickSelector('[data-delete-wrong-question]');
+    await sleep(1800);
+    check('删除后回到错题列表', await cdp.evaluate('location.pathname'), '/learning/wrong-questions');
+    const afterDelete = await api('GET', '/wrong-questions', childToken);
+    const wqList = Array.isArray(afterDelete.json) ? afterDelete.json : (afterDelete.json?.items ?? []);
+    check('删除后不再出现在列表（软删除）', wqList.some((w) => w.id === firstId) === false, true);
   } finally {
     clearTimeout(watchdog);
     try {

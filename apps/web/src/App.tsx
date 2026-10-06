@@ -9,6 +9,11 @@ import { ApprovalsPage } from './pages/ApprovalsPage';
 import { FamilyPage } from './pages/FamilyPage';
 import { GrowthCardsPage } from './pages/GrowthCardsPage';
 import { GrowthPage } from './pages/GrowthPage';
+import { LearningPage } from './pages/LearningPage';
+import { AiTutorPage } from './pages/AiTutorPage';
+import { WrongQuestionDetailPage } from './pages/WrongQuestionDetailPage';
+import { WrongQuestionFormPage } from './pages/WrongQuestionFormPage';
+import { WrongQuestionListPage } from './pages/WrongQuestionListPage';
 import { LoginPage } from './pages/LoginPage';
 import { SchedulePage } from './pages/SchedulePage';
 import { SubmitCompletePage } from './pages/SubmitCompletePage';
@@ -58,6 +63,13 @@ export function App() {
         <Route path="/tasks" element={<Navigate to="/" replace />} />
         <Route path="/schedule" element={withLayout(<SchedulePage />)} />
         <Route path="/growth-cards" element={withLayout(<GrowthCardsPage />)} />
+        {/* 学习（P6）：学习中心 → AI 解题 / 错题本（对照上游 wrong-notebook 全部功能逐步落地） */}
+        <Route path="/learning" element={withLayout(<LearningPage />)} />
+        <Route path="/learning/ai-tutor" element={withLayout(<AiTutorPage />)} />
+        <Route path="/learning/wrong-questions" element={withLayout(<WrongQuestionListPage />)} />
+        <Route path="/learning/wrong-questions/new" element={withLayout(<WrongQuestionFormPage />)} />
+        <Route path="/learning/wrong-questions/:id" element={withLayout(<WrongQuestionDetailPage />)} />
+        <Route path="/learning/wrong-questions/:id/edit" element={withLayout(<WrongQuestionFormPage />)} />
         <Route path="/growth" element={withLayout(<GrowthPage />)} />
         <Route path="/approvals" element={withLayout(<ApprovalsPage />)} />
         <Route path="/family" element={withLayout(<FamilyPage />)} />

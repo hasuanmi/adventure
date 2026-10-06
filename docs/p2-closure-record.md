@@ -839,3 +839,64 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 | 领取后 | 弹窗关闭、入口 `data-growth-card-claimed=true`、文案「今日成长卡已领取 ✓」且**不含时刻** |
 | 每日限一张（规则未改） | 重复 `POST /attendance/check-in` → **409** |
 | 成长记录页 | 1 张卡（2026-10-06 + 缩略图）、**无考勤措辞** |
+
+---
+
+## 25. P6-1 错题本落地（2026-10-06）：逐字段对照上游 wrong-notebook
+
+用户要求：**照那个开源项目的所有功能做（前端+后端），不要自己发挥**。故本批**逐字段、逐接口对照**上游 v1.9.1（盘点见 `docs/wrong-notebook-feature-inventory.md`），只做硬基线适配。
+
+### 25.1 上游 → 本项目（一一对应）
+
+| 上游（SQLite，Next.js） | 本项目 | 说明 |
+|---|---|---|
+| `User.educationStage` / `enrollmentYear` | 同名字段加到 `users`（`education_stage` / `enrollment_year`） | 原样保留 |
+| `KnowledgeTag`（邻接表 + `order`/`code`/`isSystem`/`userId`） | `knowledge_tags`（`parent_id`/`order`/`code`/`is_system`/`child_id`） | 层级、排序、编码、系统/自定义区分全部保留；`userId`→`child_id` |
+| `KnowledgeTag` 唯一约束 `@@unique([subject,name,userId,parentId])` | **两条手写部分唯一索引**（系统标签 / 自定义标签分开） | 上游在 SQLite 下 **NULL 不参与唯一**（根节点其实不受保护）→ 迁 PG 顺手修掉 |
+| `ErrorItem`（18 个字段） | `wrong_questions`（字段名逐一保留：`questionText/answerText/analysis/wrongAnswerText/mistakeAnalysis/mistakeStatus/geogebraCommands/source/errorType/userNotes/masteryLevel/gradeSemester/paperLevel/ocrText`） | 见下"改动的 4 处" |
+| `ErrorItem.originalImageUrl`（base64 data URL） | `original_image_key` | 本项目禁止 base64 入 DB（硬基线）；上传接口随 P6-2 |
+| `Subject` 表（用户自由命名科目） | **固定学科枚举** chinese/math/english/olympiad/pet | 已在 `opensource-mapping.md` 登记为未采用项（违反固定枚举决策） |
+| `knowledgePoints`（上游标注 [DEPRECATED] 却仍在读写） | **不移植该列** | 单一来源 = M2M `tags`（上游双轨导致"相似题读空知识点"的坑） |
+| `ReviewSchedule`（scheduledFor/completedAt/isCorrect） | `wrong_question_reviews`（同三字段） | 忠实保留上游表结构 |
+| `PracticeRecord` | `practice_records`（subject/difficulty/isCorrect） | 忠实保留（上游无 errorItemId，也保持一致） |
+| 物理删除 | `deleted_at` 软删除 | 硬基线 |
+| 错误体 `{message,code?,details?}` | `{error,reason,fields?}` | 硬基线 |
+
+### 25.2 接口对照（本批已实现）
+
+| 上游 | 本项目 | 备注 |
+|---|---|---|
+| `GET /api/error-items/list` | `GET /wrong-questions` | 关键词（题干/答案/解析/错因/笔记 5 字段）+ 学科 + 掌握度 + 标签 + 时间区间 + 分页（**默认 18/页**同上游） |
+| `POST /api/error-items` | `POST /wrong-questions` | 含上游**去重规则**：同孩子 + 题干前 100 字符 + **2 秒时间窗** → 409 `duplicate_question` |
+| `GET/PATCH/DELETE /api/error-items/[id]` | 同名（DELETE 改软删） | |
+| `PATCH /api/error-items/[id]/mastery` | `PATCH /wrong-questions/:id/mastery` | 0/1/2（上游 UI 只用 0/1；结构照 schema 支持 2） |
+| `PATCH /api/error-items/[id]/notes` | 同名 | **补了上游缺失的归属校验**（上游此处是 IDOR） |
+| `POST/GET /api/error-items/[id]/reviews` 类 | `/wrong-questions/:id/reviews` | |
+| `/api/tags`（列表/新建/删除） | `GET/POST/DELETE /knowledge-tags`（含 `tree=true` 树形） | `stats`/`migrate-tags` 随 P6-4 |
+| — | | P6-2 上传、P6-3 AI、P6-4 相似题/统计/导入导出/打印 未做（按 4 批计划） |
+
+### 25.3 前端（本批）
+
+- **底部导航加第三格「学习」**（用户指定）→ `/learning` 学习中心，两个入口：**错题本**、**AI 解题**（后者本批为能力清单 + 「AI 未配置」状态，符合"先搭适配层"决策）
+- `/learning/wrong-questions` 列表：搜索 + 学科 + 掌握度筛选、分页、卡片（学科/掌握度/复习次数/日期/题干摘要/知识点标签）
+- `/learning/wrong-questions/new` 录入（**字段与上游 ErrorItem 一一对应**）+ **自定义知识点标签**可现场新建并选中
+- `/learning/wrong-questions/:id` 详情：全字段 + **掌握度三态切换** + **复习记录（会了/还没会）** + 笔记 + 删除
+- 图片上传位置已留说明（P6-2 连同上传接口一起做，用户已确认）
+
+### 25.4 验证
+
+`browser-check` 159 → **175 条全绿（65 秒）**；本批新增 16 条，实测：
+
+| 断言 | 实测 |
+|---|---|
+| 底部导航 3 格且含「学习」、三格同一行 | 今日,日程,学习；行数 **1** |
+| 学习中心两个入口 | 错题本 ✓ / AI 解题 ✓ |
+| UI 录入错题（含新建自定义标签） | 保存后回到列表；卡片：`➕ 数学 新题 2026/10/6 勾股定理测试题… 勾股定理` |
+| **上游去重规则** | 同题干短时间重复录入 → **409**，`reason=duplicate_question` |
+| 详情页字段 | 题干/答案/解析/错因 全部展示 |
+| 掌握度切换 | 切到「复习中」生效 |
+| 复习记录 | 记录后显示「复习记录（1 次）」 |
+| 笔记 | 保存后重新进入仍回显 |
+| 删除 | 软删除，列表不再出现 |
+
+> 过程中我自己犯并修掉的两处：① 查询参数 DTO 用了 `@IsInt()` 但 Nest 未开隐式转换 → 列表 400（改用 `@Type(() => Number)`）；② 底栏网格写死 `grid-cols-2`，加第三格后「学习」换行（改为按 nav 长度生成列数，并加"同一行"断言）。

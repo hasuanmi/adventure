@@ -8,9 +8,11 @@ import { CompletionModule } from './completion/completion.module';
 import { FamilyModule } from './family/family.module';
 import { GrowthModule } from './growth/growth.module';
 import { HealthModule } from './health/health.module';
+import { KnowledgeTagModule } from './knowledge-tag/knowledge-tag.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RewardProfileModule } from './reward-profile/reward-profile.module';
 import { TaskModule } from './task/task.module';
+import { WrongQuestionModule } from './wrong-question/wrong-question.module';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { TaskModule } from './task/task.module';
     GrowthModule,
     RewardProfileModule,
     AttendanceModule,
+    WrongQuestionModule,
+    KnowledgeTagModule,
   ],
 })
 export class AppModule {}

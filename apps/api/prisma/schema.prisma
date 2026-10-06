@@ -28,6 +28,13 @@ model User {
   rewardGrants  RewardGrant[]    @relation("GrantUser")
   attendances   Attendance[]     @relation("AttendanceUser")
 
+  // 错题本相关归属（上游 User 上的字段/关系，原样保留）
+  educationStage    String?          @map("education_stage") @db.VarChar(24)
+  enrollmentYear    Int?             @map("enrollment_year") @db.SmallInt
+  wrongQuestions    WrongQuestion[]  @relation("WrongQuestionChild")
+  wrongQuestionTags KnowledgeTag[]   @relation("CustomTagChild")
+  practiceRecords   PracticeRecord[]
+
   @@map("users")
 }
 
@@ -271,4 +278,129 @@ model Attendance {
   @@index([familyId], name: "idx_attendances_family_id")
   @@index([userId], name: "idx_attendances_user_id")
   @@map("attendances")
+}
+
+// =====================================================================
+// P6：错题本（WrongQuestion）—— **逐字段对齐上游 wrong-notebook v1.9.1**
+// 上游 model → 本项目 model：KnowledgeTag→KnowledgeTag、Subject→（用固定学科枚举，未采用自由科目表）、
+//   ErrorItem→WrongQuestion、ReviewSchedule→WrongQuestionReview、PracticeRecord→PracticeRecord
+// 硬基线适配（已登记，非发挥）：每表加 family_id/child_id；软删除 deleted_at；学科固定枚举；
+//   图片存 key（上游 originalImageUrl 存 base64）；上游已废弃的 knowledgePoints 列**不移植**（单一来源=M2M tags）。
+// =====================================================================
+
+// 知识点标签（上游 KnowledgeTag：邻接表无限层级；系统预设 vs 用户自定义）
+model KnowledgeTag {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId String  @map("family_id") @db.Uuid
+  name     String  @db.VarChar(64)
+  subject  String  @db.VarChar(32)
+
+  // 层级（邻接表；上游 parentId + onDelete: SetNull）
+  parentId String?        @map("parent_id") @db.Uuid
+  parent   KnowledgeTag?  @relation("TagHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children KnowledgeTag[] @relation("TagHierarchy")
+
+  order Int     @default(0) @db.SmallInt
+  code  String? @db.VarChar(32)
+
+  // 系统预设 vs 自定义（上游 isSystem + userId；我们按孩子归属）
+  isSystem Boolean @default(false) @map("is_system")
+  childId  String? @map("child_id") @db.Uuid
+  child    User?   @relation("CustomTagChild", fields: [childId], references: [id], onDelete: Cascade)
+
+  questions WrongQuestion[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([familyId], name: "idx_knowledge_tags_family_id")
+  @@index([subject], name: "idx_knowledge_tags_subject")
+  @@index([parentId], name: "idx_knowledge_tags_parent_id")
+  @@map("knowledge_tags")
+}
+
+// 错题（上游 ErrorItem；字段名逐一保留）
+model WrongQuestion {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId String @map("family_id") @db.Uuid
+  // 上游 userId（错题本归属）→ 我们的 childId；另有 createdBy（家长可代录）
+  childId   String @map("child_id") @db.Uuid
+  createdBy String @map("created_by") @db.Uuid
+
+  // 上游 subjectId（外键到自由科目表）→ 我们固定学科枚举（VARCHAR + 应用层白名单）
+  subject String? @db.VarChar(32)
+
+  // 图片：上游 originalImageUrl（base64）→ 我们存 key（P6-2 上传）
+  originalImageKey String? @map("original_image_key") @db.VarChar(255)
+  ocrText          String? @map("ocr_text") @db.Text
+
+  // AI 解析结果（字段名同上游）
+  questionText     String? @map("question_text") @db.Text
+  answerText       String? @map("answer_text") @db.Text
+  analysis         String? @db.Text
+  wrongAnswerText  String? @map("wrong_answer_text") @db.Text
+  mistakeAnalysis  String? @map("mistake_analysis") @db.Text
+  mistakeStatus    String? @map("mistake_status") @db.VarChar(16)
+  geogebraCommands String? @map("geogebra_commands") @db.Text
+
+  // 用户元数据（字段名同上游）
+  source    String? @db.VarChar(64)
+  errorType String? @map("error_type") @db.VarChar(64)
+  userNotes String? @map("user_notes") @db.Text
+
+  // 掌握度（上游 0 New / 1 Reviewing / 2 Mastered）
+  masteryLevel  Int     @default(0) @map("mastery_level") @db.SmallInt
+  gradeSemester String? @map("grade_semester") @db.VarChar(48)
+  paperLevel    String? @map("paper_level") @db.VarChar(8)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  child   User                @relation("WrongQuestionChild", fields: [childId], references: [id], onDelete: Cascade)
+  tags    KnowledgeTag[]      // 上游 M2M（隐式连接表）
+  reviews WrongQuestionReview[]
+
+  @@index([familyId], name: "idx_wrong_questions_family_id")
+  @@index([childId], name: "idx_wrong_questions_child_id")
+  @@index([subject], name: "idx_wrong_questions_subject")
+  @@index([masteryLevel], name: "idx_wrong_questions_mastery_level")
+  @@map("wrong_questions")
+}
+
+// 复习记录（上游 ReviewSchedule：scheduledFor / completedAt / isCorrect）
+model WrongQuestionReview {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId        String        @map("family_id") @db.Uuid
+  wrongQuestionId String        @map("wrong_question_id") @db.Uuid
+  wrongQuestion   WrongQuestion @relation(fields: [wrongQuestionId], references: [id], onDelete: Cascade)
+
+  scheduledFor DateTime  @map("scheduled_for") @db.Timestamptz(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  isCorrect    Boolean?  @map("is_correct")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([familyId], name: "idx_wrong_question_reviews_family_id")
+  @@index([wrongQuestionId], name: "idx_wrong_question_reviews_question_id")
+  @@map("wrong_question_reviews")
+}
+
+// 练习记录（上游 PracticeRecord；字段保持上游口径：subject/difficulty/isCorrect）
+model PracticeRecord {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId String  @map("family_id") @db.Uuid
+  childId  String  @map("child_id") @db.Uuid
+
+  subject    String? @db.VarChar(32)
+  difficulty String? @db.VarChar(16)
+  isCorrect  Boolean? @map("is_correct")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  child User @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([familyId], name: "idx_practice_records_family_id")
+  @@index([childId], name: "idx_practice_records_child_id")
+  @@map("practice_records")
 }

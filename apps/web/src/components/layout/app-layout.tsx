@@ -1,4 +1,4 @@
-import { CalendarDays, Home, LogOut, Users } from 'lucide-react';
+import { BookOpen, CalendarDays, Home, LogOut, Users } from 'lucide-react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { levelProgressFromXp } from '@huahua/shared-types';
@@ -24,10 +24,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const xp = growthQuery.data?.xp ?? 0;
   const xpProgress = growthQuery.data ? levelProgressFromXp(growthQuery.data.xp) : null;
 
-  // 底栏 2 格：今日 | 日程（docs/p2-ui-ux-review.md §3：任务并入今日；成长等后续阶段再加入）
+  // 底栏 3 格：今日 | 日程 | 学习（用户 2026-10-06 指定加入第三格「学习」，
+  // 内含「AI 解题」「错题本」，以后继续加别的学习功能）
   const nav = [
     { to: '/', label: '今日', icon: Home },
     { to: '/schedule', label: '日程', icon: CalendarDays },
+    { to: '/learning', label: '学习', icon: BookOpen },
   ];
 
   function onLogout() {
@@ -148,7 +150,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* 底部两格导航（今日｜日程）：shell 的一行，非浮层 */}
       <div className="shrink-0 bg-brandBg px-3 pb-3">
-        <nav className="mx-auto grid w-full max-w-md grid-cols-2 gap-1 border-2 border-ink bg-ink p-1.5 shadow-pixel md:max-w-2xl">
+        {/* 列数跟随 nav 长度（加第三格「学习」时不能写死 2 列，否则第三格会掉到第二行） */}
+        <nav
+          data-app-nav
+          style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}
+          className="mx-auto grid w-full max-w-md gap-1 border-2 border-ink bg-ink p-1.5 shadow-pixel md:max-w-2xl"
+        >
           {nav.map((item) => (
             <NavLink
               key={item.to}

@@ -10,6 +10,7 @@ export * from './task-icon';
 export * from './completion';
 export * from './approval';
 export * from './growth';
+export * from './wrong-question';
 export * from './growth-card';
 export * from './attendance';
 export * from './reward-profile';
