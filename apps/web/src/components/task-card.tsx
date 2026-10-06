@@ -104,13 +104,18 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
   }
 
   return (
-    <Panel className={cn('relative mx-1 overflow-hidden', expanded && 'bg-panelLight')}>
+    <Panel className={cn('relative overflow-hidden', expanded && 'bg-panelLight')}>
+      {/* 素材外框（Kenney UI pack, CC0）：Thick outline tile_0072-0075 四角件 */}
+      <img src="/ui/frame-tl.png" alt="" aria-hidden className="pointer-events-none absolute left-0 top-0 z-20 h-6 w-6 [image-rendering:pixelated]" />
+      <img src="/ui/frame-tr.png" alt="" aria-hidden className="pointer-events-none absolute right-0 top-0 z-20 h-6 w-6 [image-rendering:pixelated]" />
+      <img src="/ui/frame-bl.png" alt="" aria-hidden className="pointer-events-none absolute bottom-0 left-0 z-20 h-6 w-6 [image-rendering:pixelated]" />
+      <img src="/ui/frame-br.png" alt="" aria-hidden className="pointer-events-none absolute bottom-0 right-0 z-20 h-6 w-6 [image-rendering:pixelated]" />
       <button
         type="button"
         data-task-card-toggle
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-2.5 p-3 pr-2.5 text-left transition hover:bg-panelLight"
+        className="flex w-full items-center gap-2 p-2 pr-2 text-left transition hover:bg-panelLight"
       >
         {/* 图标 tile（44px 见方，对齐 Demo 比例；内嵌 32px 原生图标 → 像素不糊）+ 像素角饰 */}
         <span className="relative grid h-11 w-11 shrink-0 place-items-center border-2 border-ink bg-panelLight shadow-pixel">
