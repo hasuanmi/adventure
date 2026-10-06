@@ -1622,19 +1622,24 @@ async function main() {
     const afterBatch = await api('GET', '/wrong-questions', childToken);
     check('批量删除为软删除（列表不含已删）', (afterBatch.json?.items ?? []).length, 0);
 
-    // 导出按钮真的下载（CDP 允许下载并读取文件名）
-    await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: join(ROOT, 'ui-shots', 'downloads') }).catch(() => {});
-    await cdp.clickSelector('[data-backup-json]');
-    await sleep(1500);
-    const exportNotice = await cdp.evaluate(`document.querySelector('[data-batch-result]')?.textContent ?? ''`);
-    console.log(`      备份 JSON：${JSON.stringify(exportNotice)}`);
-    check('「备份 JSON」按钮给出结果提示', String(exportNotice).includes('已导出'), true);
-
-    // 清空全部（两步确认）
-    await cdp.clickSelector('[data-clear-all]');
-    await sleep(200);
-    const confirmText = await cdp.evaluate(`document.querySelector('[data-clear-all]')?.textContent ?? ''`);
-    check('清空全部需要二次确认', String(confirmText).includes('再点一次'), true);
+    // 按上游设计：列表页不再有 备份 JSON / 导入备份 / 清空全部 / 重复的"上传新题"按钮
+    const toolbarUi = await cdp.evaluate(`(() => ({
+      backup: Boolean(document.querySelector('[data-backup-json]')),
+      importBtn: Boolean(document.querySelector('[data-import]')),
+      clearAll: Boolean(document.querySelector('[data-clear-all]')),
+      uploadBtn: Boolean(document.querySelector('[data-wrong-question-new]')),
+      hasBatch: Boolean(document.querySelector('[data-batch-toggle]')),
+      hasExport: Boolean(document.querySelector('[data-export]')),
+    }))()`);
+    console.log(`      列表工具条：${JSON.stringify(toolbarUi)}`);
+    check('列表页已移除「备份 JSON」', toolbarUi.backup, false);
+    check('列表页已移除「导入备份」', toolbarUi.importBtn, false);
+    check('列表页已移除「清空全部」', toolbarUi.clearAll, false);
+    check('列表页已移除重复的「上传新题」按钮', toolbarUi.uploadBtn, false);
+    check('列表页保留「批量选择」与「导出 / 打印」（对照上游）', toolbarUi.hasBatch && toolbarUi.hasExport, true);
+    // 数据备份/清空接口仍保留（上游把它们放在设置/数据迁移，不在列表）
+    const exportApi = await api('GET', '/wrong-questions/export', childToken);
+    check('数据备份导出接口仍可用（仅无界面入口）', exportApi.status, 200);
 
     // AI 重解（详情页）：走真模型（未配置时跳过）
     const aiStatus2 = await api('GET', '/ai/status', childToken);
@@ -1680,24 +1685,69 @@ async function main() {
     );
     await cdp.waitFor('[data-print-area]');
     const printUi = await cdp.evaluate(`(() => ({
+      title: document.querySelector('h1')?.textContent ?? '',
       questions: document.querySelectorAll('[data-print-question]').length,
       hasPrintButton: Boolean(document.querySelector('[data-print-now]')),
-      bodyHasAnswer: String(document.querySelector('[data-print-area]')?.innerText || '').includes('10'),
-      bg: getComputedStyle(document.querySelector('[data-print-area]')).backgroundColor,
+      hasScale: Boolean(document.querySelector('[data-print-scale]')),
+      scaleValue: document.querySelector('[data-print-scale]')?.value ?? '',
+      toggles: [...document.querySelectorAll('[data-print-toggle]')].map((i) => ({
+        key: i.getAttribute('data-print-toggle'),
+        checked: i.checked,
+      })),
+      selectionLabel: document.querySelector('[data-print-selection-count]')?.textContent ?? '',
+      picks: document.querySelectorAll('[data-print-pick]').length,
+      hasSelectAll: Boolean(document.querySelector('[data-print-select-all]')),
+      hasClearSelection: Boolean(document.querySelector('[data-print-clear-selection]')),
+      bodyHasAnswer: String(document.querySelector('[data-print-area]')?.innerText || '').includes('答案：'),
+      bodyHasQuestionText: String(document.querySelector('[data-print-area]')?.innerText || '').includes('5+5'),
       toolbar: Boolean(document.querySelector('[data-no-print]')),
     }))()`);
     console.log(`      打印预览：${JSON.stringify(printUi)}`);
-    check('打印预览列出错题', Number(printUi.questions) >= 2, true);
-    check('打印预览含「打印 / 保存为 PDF」按钮', printUi.hasPrintButton, true);
-    check('打印内容默认含答案', printUi.bodyHasAnswer, true);
-    check('工具条标记为打印时隐藏（data-no-print）', printUi.toolbar, true);
-    // 关掉答案 → 内容里不应再出现答案
-    await cdp.clickSelector('[data-print-toggle="answer"]');
-    await sleep(400);
-    const afterToggle = await cdp.evaluate(
-      `String(document.querySelector('[data-print-area]')?.innerText || '').includes('答案：')`,
+    check('打印预览标题含选中/总数（上游 countLabel 格式）', /打印预览（\d+(?:\/\d+)? 道题目）/.test(printUi.title), true);
+    check('打印预览自带「图片比例」滑块（默认 70）', printUi.hasScale && String(printUi.scaleValue) === '70', true);
+    check(
+      '四个内容开关齐全且**默认全不勾**（空白练习卷，同上游）',
+      printUi.toggles.map((t) => t.key).join(',') === 'questionText,answer,analysis,tags' &&
+        printUi.toggles.every((t) => t.checked === false),
+      true,
     );
-    check('可关闭答案（当练习卷打印）', afterToggle, false);
+    check('有「选择题目 (n/total)」+ 全选 / 清空选择 + 逐题勾选', 
+      /选择题目（\d+\/\d+）/.test(printUi.selectionLabel) &&
+        printUi.hasSelectAll &&
+        printUi.hasClearSelection &&
+        Number(printUi.picks) >= 2,
+      true,
+    );
+    check('默认不勾内容时打印区不含答案', printUi.bodyHasAnswer, false);
+    check('工具条标记为打印时隐藏（data-no-print）', printUi.toolbar, true);
+    // 勾上「显示答案 + 原题文字」→ 打印区出现答案与题干
+    await cdp.clickSelector('[data-print-toggle="answer"]');
+    await cdp.clickSelector('[data-print-toggle="questionText"]');
+    await sleep(400);
+    const afterToggle = await cdp.evaluate(`(() => {
+      const text = String(document.querySelector('[data-print-area]')?.innerText || '');
+      return { hasAnswer: text.includes('答案：'), hasText: text.includes('5+5') };
+    })()`);
+    check('可勾选内容（显示答案 + 原题文字）', afterToggle.hasAnswer && afterToggle.hasText, true);
+    // 清空选择 → 打印按钮禁用 + 空状态提示
+    await cdp.clickSelector('[data-print-clear-selection]');
+    await sleep(400);
+    const cleared = await cdp.evaluate(`(() => ({
+      label: document.querySelector('[data-print-selection-count]')?.textContent ?? '',
+      disabled: document.querySelector('[data-print-now]')?.disabled,
+      empty: Boolean(document.querySelector('[data-print-empty-state]')),
+      printed: document.querySelectorAll('[data-print-question]').length,
+    }))()`);
+    console.log(`      清空选择：${JSON.stringify(cleared)}`);
+    check('清空选择后打印按钮禁用', cleared.disabled === true, true);
+    check('清空选择后显示空状态且不打印任何题', cleared.empty === true && Number(cleared.printed) === 0, true);
+    await cdp.clickSelector('[data-print-select-all]');
+    await sleep(400);
+    check(
+      '「全选」恢复全部题目',
+      Number(await cdp.evaluate(`document.querySelectorAll('[data-print-question]').length`)) >= 2,
+      true,
+    );
     await cdp.shot('38-print-preview');
     // 打印媒体下：外壳隐藏、打印区域白底黑字
     await cdp.send('Emulation.setEmulatedMedia', { media: 'print' });

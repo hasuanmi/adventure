@@ -1,7 +1,6 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
 import { MASTERY_LABELS, WRONG_QUESTION_SUBJECTS } from '@huahua/shared-types';
 import { Badge } from '../components/ui/badge';
 import { Panel } from '../components/ui/card';
@@ -19,20 +18,21 @@ function excerpt(text: string | null, len = 80): string {
   return flat.length > len ? `${flat.slice(0, len)}…` : flat;
 }
 
-/** 错题列表（对照上游错题列表：关键词/学科/掌握度筛选 + 分页；后续批加统计与图片缩略图） */
+/**
+ * 错题列表（**对照上游 error-list.tsx**）：
+ *  · 筛选：关键词 / 学科 / 掌握度 + 分页（默认 18/页，同上游）
+ *  · 工具条只有两件事：**批量选择（→ 批量删除）** 与 **导出 / 打印**（跳打印预览页，在那里选题与选内容）
+ *  · 按上游设计，数据备份（JSON 导出/导入）与"清空全部"不放在这里（清空属于设置项；备份是数据迁移工具）
+ */
 export function WrongQuestionListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const importInput = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
   const [subject, setSubject] = useState('');
   const [masteryLevel, setMasteryLevel] = useState<string>('');
   const [page, setPage] = useState(1);
   const [batch, setBatch] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
-  const [confirmClear, setConfirmClear] = useState(false);
-  const [imported, setImported] = useState<{ imported: number; skipped: number } | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['wrong-questions'] });
@@ -45,50 +45,7 @@ export function WrongQuestionListPage() {
       setSelected([]);
       refresh();
     },
-    onError: () => setNotice('批量删除失败'),
   });
-  const clearAll = useMutation({
-    mutationFn: () => wrongQuestionsApi.clear(),
-    onSuccess: () => {
-      setSelected([]);
-      refresh();
-    },
-    onError: () => setNotice('清空失败'),
-  });
-
-  /** 导出备份：前端生成 JSON 文件下载（上游 /api/export 同构） */
-  const onExport = async (): Promise<void> => {
-    try {
-      const data = await wrongQuestionsApi.exportAll();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `wrong-questions-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setNotice(`已导出 ${data.questions.length} 题`);
-    } catch {
-      setNotice('导出失败');
-    }
-  };
-
-  /** 导入备份（后端按题干去重，重复的跳过） */
-  const onImport = async (file: File): Promise<void> => {
-    try {
-      const text = await file.text();
-      const payload = JSON.parse(text) as { version?: number; questions?: unknown[] };
-      const result = await wrongQuestionsApi.importAll({
-        version: payload.version ?? 1,
-        questions: payload.questions ?? [],
-      });
-      setImported(result);
-      setNotice(null);
-      refresh();
-    } catch {
-      setNotice('导入失败：请选择本应用导出的 JSON 备份文件');
-    }
-  };
 
   const query = useQuery({
     queryKey: ['wrong-questions', { search, subject, masteryLevel, page }],
@@ -110,16 +67,9 @@ export function WrongQuestionListPage() {
       <WrongQuestionNav />
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-extrabold tracking-widest">查看错题本</h1>
-        <Link
-          to="/learning/wrong-questions/new"
-          data-wrong-question-new
-          className="inline-flex items-center gap-1 border-2 border-ink bg-accent px-3 py-1.5 text-xs font-extrabold text-white shadow-pixel active:translate-y-0.5"
-        >
-          <Plus className="h-3.5 w-3.5" /> 上传新题
-        </Link>
       </div>
 
-      {/* 工具条：批量选择 / 导出 / 导入 / 清空（对照上游 batch-delete、clear、export、import） */}
+      {/* 工具条（对照上游 error-list：多选 → 批量删除；导出 / 打印 → 打印预览页里选题与选项） */}
       <div className="flex flex-wrap gap-1.5">
         <button
           type="button"
@@ -127,7 +77,6 @@ export function WrongQuestionListPage() {
           onClick={() => {
             setBatch((b) => !b);
             setSelected([]);
-            setConfirmClear(false);
           }}
           className={`border-2 border-ink px-2 py-1 text-xs font-bold shadow-pixel active:translate-y-0.5 ${
             batch ? 'bg-ink text-panelLight' : 'bg-panel'
@@ -160,12 +109,11 @@ export function WrongQuestionListPage() {
           type="button"
           data-export
           onClick={() => {
-            // 导出 = 先进入打印预览，再在打印对话框里另存为 PDF（用户要求）
+            // 导出 = 打印预览页里选题目 + 选内容 → 打印对话框另存为 PDF（对照上游 error-list 的 handleExportPrint）
             const qs = new URLSearchParams();
             if (subject) qs.set('subject', subject);
             if (masteryLevel !== '') qs.set('masteryLevel', masteryLevel);
             if (search) qs.set('search', search);
-            if (selected.length) qs.set('ids', selected.join(','));
             const query = qs.toString();
             navigate(`/learning/wrong-questions/print${query ? `?${query}` : ''}`);
           }}
@@ -173,58 +121,10 @@ export function WrongQuestionListPage() {
         >
           导出 / 打印
         </button>
-        <button
-          type="button"
-          data-backup-json
-          onClick={() => void onExport()}
-          className="border-2 border-ink bg-panel px-2 py-1 text-xs font-bold shadow-pixel active:translate-y-0.5"
-        >
-          备份 JSON
-        </button>
-        <button
-          type="button"
-          data-import
-          onClick={() => importInput.current?.click()}
-          className="border-2 border-ink bg-panel px-2 py-1 text-xs font-bold shadow-pixel active:translate-y-0.5"
-        >
-          导入备份
-        </button>
-        <input
-          ref={importInput}
-          type="file"
-          accept="application/json,.json"
-          data-import-input
-          className="hidden"
-          onChange={(e) => {
-            const picked = e.target.files?.[0];
-            if (picked) void onImport(picked);
-            e.target.value = '';
-          }}
-        />
-        <button
-          type="button"
-          data-clear-all
-          onClick={() => {
-            if (!confirmClear) {
-              setConfirmClear(true);
-              return;
-            }
-            setConfirmClear(false);
-            clearAll.mutate();
-          }}
-          className={`border-2 border-danger px-2 py-1 text-xs font-bold shadow-pixel active:translate-y-0.5 ${
-            confirmClear ? 'bg-danger text-white' : 'bg-danger/10 text-danger'
-          }`}
-        >
-          {confirmClear ? '再点一次确认清空全部' : '清空全部'}
-        </button>
       </div>
-      {(batchDelete.data || clearAll.data || imported || notice) && (
+      {batchDelete.data && (
         <p data-batch-result className="text-[11px] font-bold text-ok">
-          {batchDelete.data && `已删除 ${batchDelete.data.deleted} 题 · `}
-          {clearAll.data && `已清空 ${clearAll.data.deleted} 题 · `}
-          {imported && `导入 ${imported.imported} 题（跳过重复 ${imported.skipped} 题）`}
-          {notice && <span className="text-inkSoft">{notice}</span>}
+          已删除 {batchDelete.data.deleted} 题
         </p>
       )}
 

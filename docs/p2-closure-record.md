@@ -1079,3 +1079,53 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 AI 识题/重解/相似题、文件上传、批量删除/清空、导入/导出、练习记录与统计、打印预览（导出 PDF）、认证与家庭。
 **未做（用户明确排除）**：用户档案（`/api/user` 学段/入学年）、GeoGebra 交互演示（`/api/geogebra-analyze`、`[id]/geogebra`）。
 管理后台（`/api/admin/*`）、`/api/settings`（明文密钥零认证）、`openclaw/batch-upload` 属**不采用**（见 `docs/p6-fidelity-audit.md` §2）。
+
+---
+
+## 30. 订正：导出/打印按上游重做（2026-10-06，用户指出我做错了）
+
+用户反馈三处，逐条订正：
+
+### 30.1 「导出只导出了错题列表」→ 打印预览页要自带**选题 + 内容选项**
+
+对照上游 `print-preview/page.tsx` 重做（原先那版是我自己拼的，缺了上游的核心交互）：
+
+| 上游 print-preview | 本项目（订正后） |
+|---|---|
+| 标题「打印预览 (选中/总数 道题目)」，全选时只显示总数（`getPrintPreviewCountLabel`） | 同（`打印预览（2 道题目）` / `（1/2 道题目）`） |
+| **图片比例 slider 30–100，默认 70** | 同（`data-print-scale`） |
+| 四个内容开关：**原题文字 / 显示答案 / 显示解析 / 显示知识点，默认全部不勾**（打出来是空白练习卷） | 同（`data-print-toggle`） |
+| **选择题目 (n/total)** + **全选** + **清空选择** + 逐题勾选（默认全选） | 同（`data-print-pick`/`data-print-select-all`/`data-print-clear-selection`） |
+| 打印按钮在**未选中任何题时禁用**；空状态分 `noItems` / `noSelection` | 同 |
+| `shouldReserveAnswerSpace = !showAnswers && !showAnalysis` → **给作答留白** | 同（`pb-20 print:pb-16`） |
+| `PRINT_PREVIEW_PAGE_SIZE = 200` | 同（常量入 shared-types，DTO 上限随之放到 200） |
+| 题目图片按 `imageScale%` 缩放 | 同（图片走鉴权 blob URL：`hooks/use-authed-image.ts`） |
+
+### 30.2 「删除备份 JSON」+「导入的逻辑是什么」
+
+**上游的 `/api/import` 是"整账号数据备份还原"**（subjects + customTags + errorItems + ……，配合 `/api/export?all=`），
+**不是"识别并导入错题"**——我把它做成列表上的按钮，语义与位置都不对。用户判断正确，已订正：
+
+- 列表页 **删除** 「备份 JSON」「导入备份」「清空全部」三个按钮
+- 上游的**清空**实际位于 `settings-dialog.tsx`（设置项），不在列表 → 同上游移除
+- 后端 `GET /wrong-questions/export`、`POST /wrong-questions/import`、`DELETE /wrong-questions/clear` **保留**
+  （数据迁移/设置用，界面暂不暴露），并在断言里记录"接口仍可用、仅无界面入口"
+
+### 30.3 「上传新题都可以删了，内容重复」
+
+列表页右上角那个「+ 上传新题」与顶部四入口里的「上传新题」重复 → **已删除**。
+
+### 30.4 工具条最终形态（对照上游 `error-list.tsx`）
+
+只有两件事：**批量选择（→ 批量删除）** 与 **导出 / 打印**（带当前筛选跳打印预览，由打印页负责选题与内容）。
+断言固化：`备份/导入/清空/上传新题` 四个按钮必须**不存在**，`批量选择/导出`必须存在。
+
+### 30.5 我这次的过程错误（记录，避免重犯）
+
+1. 打印预览/导出**没先读上游实现就自己拼**（用户上一轮的"不要自己发挥"我没做到位）。
+2. `docker compose up -d --build api web | Select-Object -Last 1`：**管道被截断导致构建中途终止**，
+   容器其实还是旧镜像（api 上限仍是 100，web 还是旧界面）。我却据此误判为"接口上限问题"。
+   教训：**构建输出写文件（`*> build.log`），不要接会提前关闭管道的 cmdlet**；改完必须核对产物
+   （`docker exec … grep 新文案`）再下结论。
+
+验证：`browser-check` 226 → **235 条全绿（97 秒）**（含真模型相似题 3 道）。

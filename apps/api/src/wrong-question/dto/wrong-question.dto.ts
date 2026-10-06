@@ -4,7 +4,7 @@ import {
   MASTERY_LEVELS,
   MISTAKE_STATUSES,
   PAPER_LEVELS,
-  WRONG_QUESTION_MAX_PAGE_SIZE,
+  PRINT_PREVIEW_PAGE_SIZE,
   WRONG_QUESTION_SUBJECTS,
 } from '@huahua/shared-types';
 
@@ -23,7 +23,7 @@ export class ListWrongQuestionDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(WRONG_QUESTION_MAX_PAGE_SIZE)
+  @Max(PRINT_PREVIEW_PAGE_SIZE)
   pageSize?: number;
 }
 

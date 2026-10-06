@@ -252,9 +252,10 @@ export interface CreateWrongQuestionRequest {
 
 export type UpdateWrongQuestionRequest = Partial<CreateWrongQuestionRequest>;
 
-/** 分页常量（上游 pagination.ts：默认 18/页、最大 1000；我们按硬基线收敛为 100，已登记） */
+/** 分页常量（上游 pagination.ts：默认 18/页、打印预览 200/页；我们最大页收敛为 100，已登记） */
 export const WRONG_QUESTION_PAGE_SIZE = 18;
 export const WRONG_QUESTION_MAX_PAGE_SIZE = 100;
+export const PRINT_PREVIEW_PAGE_SIZE = 200;
 
 /** 上游去重规则：题干前 100 字符 + 短时间窗（默认 2 秒）内的同题视为重复 */
 export const WRONG_QUESTION_DEDUPE_CHARS = 100;
