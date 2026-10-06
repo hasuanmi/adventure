@@ -1,0 +1,113 @@
+# 说明：本仓库此前没有任何自动化门禁。本工作流补上 typecheck + build + 端到端冒烟。
+# 已知未覆盖（待后续立项）：
+#  - 无 ESLint/Prettier 配置（文档 §13 要求的 lint 未落地）
+#  - apps/api/test 下两个 e2e spec 硬编码 localhost:3100，需要先起 API（本轮新增的冒烟脚本已覆盖同一条主链路）
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build shared-types
+        run: pnpm --filter @huahua/shared-types build
+      - name: Typecheck all packages
+        run: pnpm typecheck
+      - name: Build API
+        run: pnpm --filter @huahua/api build
+      - name: Build Web
+        run: pnpm --filter @huahua/web build
+
+  smoke:
+    name: API smoke (family + approval loop)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: huahua
+          POSTGRES_PASSWORD: huahua_dev
+          POSTGRES_DB: huahua
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U huahua -d huahua"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://huahua:huahua_dev@localhost:5432/huahua?schema=public
+      JWT_SECRET: ci-only-secret-0123456789abcdef0123456789abcdef
+      JWT_EXPIRES_IN: 30m
+      REFRESH_TTL_DAYS: "30"
+      API_PORT: "3000"
+      CORS_ORIGINS: http://localhost:3000
+      SMOKE_BASE: http://localhost:3000/api
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: huahua
+      PGPASSWORD: huahua_dev
+      PGDATABASE: huahua
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build shared-types
+        run: pnpm --filter @huahua/shared-types build
+      - name: Prisma generate
+        run: pnpm --filter @huahua/api prisma:generate
+      - name: Apply migrations
+        run: pnpm --filter @huahua/api prisma:migrate
+      - name: Seed reward profiles
+        run: pnpm --filter @huahua/api prisma:seed
+      - name: Build API
+        run: pnpm --filter @huahua/api build
+      - name: Start API and wait for health
+        run: |
+          node apps/api/dist/main.js > /tmp/api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health > /dev/null; then
+              echo "API is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API did not become healthy in time"
+          cat /tmp/api.log
+          exit 1
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: "Smoke test (38 assertions: family, approval, multi-tenant, guards)"
+        shell: pwsh
+        run: ./scripts/p2-smoke.ps1
+      - name: API log on failure
+        if: failure()
+        run: cat /tmp/api.log || true

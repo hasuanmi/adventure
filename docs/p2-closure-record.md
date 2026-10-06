@@ -100,8 +100,19 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 | 数据清理 | 冒烟脚本末尾按用户名级联清理 | ✅ 测试用户与关联数据全部删除（`cleanup removed smoke users = 0`） |
 | 数据库 | 未新增迁移 | ✅ `schema.prisma` 与迁移目录无改动 |
 
-> 冒烟脚本运行前置：API 在 `$BASE`（默认 `http://localhost:3000/api`）运行 + 本机 psql 可连 `huahua` 库。
-> 脚本刻意只写 ASCII（Windows PowerShell 5.1 以 GBK 读取 UTF-8 文件，中文注释会破坏语法），并用 `Invoke-WebRequest`（而非 curl）避免 PS 5.1 向原生程序传参剥引号。
+> 冒烟脚本运行前置：API 在 `$BASE`（默认 `http://localhost:3000/api`，可用 `SMOKE_BASE` 覆盖）运行；DB 检查用 psql（可用 `PSQL`/`PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` 覆盖，psql 不可用时自动 SKIP 并提示）。
+> 脚本刻意只写 ASCII（Windows PowerShell 5.1 以 GBK 读取 UTF-8 文件，中文注释会破坏语法），并用 `Invoke-WebRequest`（而非 curl）避免 PS 5.1 向原生程序传参剥引号；该设计同时使其可在 CI（Linux + pwsh）直接运行。
+
+### 5.1 Docker 复验（2026-10-05，本轮交付形态）
+
+| 项 | 结果 |
+|---|---|
+| 镜像重建 | `docker compose up -d --build` → `time-api` / `time-web` 重建成功（旧镜像为 6-7 小时前代码） |
+| 端口 | `WEB_PORT=8500` **失败**（Windows 保留段已变为 `8451-8550`）→ 改 `WEB_PORT=18080`；`.env`/`.env.example`/`docs/deployment.md §7` 已同步 |
+| 容器 | postgres(healthy, 5432) / api(3000) / web=nginx(18080) 全部 Up |
+| 健康检查 | `http://localhost:3000/api/health` 与 `http://localhost:18080/api/health` 均 200 且 `db=up`；`/` 200 |
+| 端到端 | 经 nginx 路径跑 `p2-smoke.ps1` → **38/38 PASS**（等价 P1 验收项 O 的 Docker 全链路） |
+| 主机进程 | 已停掉本项目的 `pnpm dev` + `nest start --watch`（避免与 api 容器争 :3000）；旧项目 huahuastudy 与 tasklabs 预览不受影响 |
 
 ---
 
@@ -109,10 +120,13 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 
 | 限制 | 现象 | 规避方式 |
 |---|---|---|
-| `pnpm <script>` 不可用 | pnpm 用管道 spawn 子进程 → `spawn EPERM` | 直接调底层二进制（如 `node node_modules/typescript/bin/tsc ...`、`node node_modules/vite/bin/vite.js`） |
+| `pnpm <script>` 在沙箱内不可用 | pnpm 用管道 spawn 子进程 → `spawn EPERM` | 直接调底层二进制（如 `node node_modules/typescript/bin/tsc ...`、`node node_modules/vite/bin/vite.js`）；在普通终端里 `pnpm` 正常 |
 | Vite 构建需放宽沙箱 | esbuild 服务进程 `spawn EPERM`；放宽后仍需 `TEMP` 指向工作区（否则清理系统临时文件被拒） | 用 `$env:TEMP`/`$env:TMP` 指向工作区内目录后再构建 |
-| 无 git | 未安装 git，仓库无版本历史 | 本轮开工前做了源码快照（117 文件）作回滚点；**建议尽快安装 git 并建立基线提交** |
-| 无 CI / 无 lint | 文档 §13/§14 要求 CI + license 白名单校验，实际不存在 | 未在本轮引入（见 §8） |
+| Docker / 进程操作需放宽沙箱 | Docker CLI 访问命名管道、进程枚举与终止均被默认拦截 | 对**精确命令**申请一次更宽权限（仅限必要操作） |
+| ~~无 git~~ | **已解决**：winget 用户级安装 Git 2.55.0.5（`C:\Program Files\Git\cmd\git.exe`），已建仓库与基线提交 `99e0fb7` | — |
+| ~~无 CI~~ | **已解决**：新增 `.github/workflows/ci.yml`（typecheck + build + postgres 冒烟） | 仍需推送到远端仓库后才会实际运行 |
+| 无 lint | 文档 §13 要求的 lint 未落地（无 ESLint/Prettier 配置） | 未在本轮引入（CI 注释中已标注） |
+| 行尾 | 原仓库 CRLF/LF 混杂（Windows 开发 + Linux 容器构建） | 首次提交时统一为 **LF**（135 文件转换）并加 `.gitattributes`（`* text=auto eol=lf`），此后不再产生 EOL 噪声 |
 
 ---
 
@@ -134,8 +148,24 @@ P1 后端与 P2 页面各自"已完成"，但**产品闭环走不通**：
 
 ## 8. 后续建议（按价值排序）
 
-1. **装 git + 建基线提交**，再把 CI（lint + typecheck + smoke）接上——目前没有任何自动化回归门。
-2. **统一错误体**：加全局 ExceptionFilter，让 class-validator 的 400 也返回 `{error, reason, fields}`（前端 `toApiError` 已按此契约实现，现在是空转）。
-3. **P2 剩余 UI**：TaskCard 可展开面板（进度/完成标准/行内操作）、本周打卡位、成长页（`/growth/me` 接口已具备）。
-4. **P3 移动端**：`apps/mobile` 复用 `shared-types` 与后端，优先补齐 任务列表/详情/提交/审批 四屏。
-5. 之后按阶段表推进 P4 打卡（WorkPulse 逻辑直迁）与 P5 Event + 日历（TaskLabs/Kaneo）。
+1. ~~装 git + 建基线提交 + CI~~ **已完成**。下一步：把仓库推到一个远端（GitHub/GitLab）并保护 `main`，CI 才会真正跑起来。
+2. **补 lint**：加 ESLint + Prettier 并接入 CI（文档 §13 的 lint 门禁目前仍缺）。
+3. **统一错误体**：加全局 ExceptionFilter，让 class-validator 的 400 也返回 `{error, reason, fields}`（前端 `toApiError` 已按此契约实现，现在是空转）。
+4. **P2 剩余 UI**：TaskCard 可展开面板（进度/完成标准/行内操作）、本周打卡位、成长页（`/growth/me` 接口已具备）。
+5. **P3 移动端**：`apps/mobile` 复用 `shared-types` 与后端，优先补齐 任务列表/详情/提交/审批 四屏。
+6. 之后按阶段表推进 P4 打卡（WorkPulse 逻辑直迁）与 P5 Event + 日历（TaskLabs/Kaneo）。
+
+---
+
+## 9. 工程基建（2026-10-05 本轮补齐）
+
+| 项 | 结果 |
+|---|---|
+| 版本控制 | 首次建立 Git 仓库（此前无 git，无历史、无回滚、无 diff）；`git init -b main` + 基线提交 `99e0fb7`（163 文件）；`core.autocrlf=false` |
+| Git 安装 | winget 安装 Git **2.55.0.5**（`C:\Program Files\Git\cmd\git.exe`，已在机器 PATH） |
+| 行尾 | 统一 LF（135 文件 CRLF→LF）+ `.gitattributes`（`* text=auto eol=lf`，二进制显式排除） |
+| 提交身份 | 仓库级 `user.name=huahua-dev` / `user.email=dev@huahua.local`（**建议改成你自己的身份**：`git config user.name "..."`、`git config user.email "..."`） |
+| 忽略项 | 复用既有 `.gitignore`：`node_modules/`、`dist/`、`.env`、`uploads/` 等；`git check-ignore` 已复核，暂存区 0 个 node_modules/dist 文件 |
+| CI | 新增 `.github/workflows/ci.yml`：① `verify`（install → shared-types build → `pnpm typecheck` → api build → web build）② `smoke`（postgres:16 service → migrate → seed → api build → 起 API 等 health → 装 psql → 跑 `scripts/p2-smoke.ps1`，失败打印 API 日志） |
+| 冒烟脚本可移植 | `scripts/p2-smoke.ps1` 支持 `SMOKE_BASE` / `PSQL` / `PG*` 覆盖；无 psql 时 DB 断言 SKIP 并提示；已在 Linux CI 语义下可运行（pwsh 步骤） |
+| 验收脚本端口 | `scripts/p1-acceptance.ps1` 的 `$BASE` 改为默认 `http://localhost:18080/api`，并支持 `$env:ACCEPT_BASE` 覆盖 |

@@ -7,6 +7,9 @@ dist/
 build/
 *.tsbuildinfo
 
+# 受限环境下的 vite/esbuild 临时目录（见 docs/p2-closure-record.md §6）
+.tmp-esbuild/
+
 # env
 .env
 .env.local

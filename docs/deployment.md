@@ -102,11 +102,21 @@ pnpm dev:mobile     # expo start（真机/模拟器，EXPO_PUBLIC_API_URL 指向
 > - `/api/health` 经 api:3000 与 nginx:8500 均 200 且 `db=up`；注册/登录/me 经 nginx 全链路通过；`uploads` 卷落盘；`docker compose restart` 后用户登录与 uploads 文件均持久。
 > - 本机适配：`8080` 被 Windows（Hyper-V）保留端口占用 → `.env` 设 `WEB_PORT=8500`（已在 .env 记录）。
 
+> **2026-10-05（P2 收口后复验，Docker Engine 29.7.2）**：
+> - 重建镜像：`docker compose up -d --build` → `time-api` / `time-web` 重新构建（旧镜像为 6-7 小时前的代码）。
+> - **`WEB_PORT=8500` 本次失败**：Windows 保留端口段已变为 `8451-8550`（保留段随重启变化，见 §7）→ 改用 `WEB_PORT=18080`（.env 已更新，`.env.example` 同步说明）。
+> - 三容器 Up：postgres(healthy, 5432) / api(3000) / web(nginx, 18080)；`/api/health` 经 api:3000 与 nginx:18080 均 200 且 `db=up`，`/` 200。
+> - **端到端冒烟（经 nginx）**：`scripts/p2-smoke.ps1` → 38/38 通过（家庭入口 → 建任务 → 提交 → 家长确认 → 发奖励，含多租户与越权负例），等价覆盖 §6 的 auth/api/反代三项。
+> - 主机侧不再需要 `nest start --watch`（本项目已切换为 Docker 运行）；旧项目 huahuastudy 与 tasklabs 预览进程不受影响。
+
 ## 7. 本机端口适配记录（仅本地，非架构变更）
 
 | 端口 | 用途 | 本机适配 | 原因 |
 |---|---|---|---|
-| 8500 | web（nginx 宿主端口） | `WEB_PORT=8500`（.env） | 8080 被 Windows 保留端口占用 |
-| 3000 | api 宿主端口 | 无（默认） | 与旧项目容器共存时需先停旧栈 |
+| **18080** | web（nginx 宿主端口） | `WEB_PORT=18080`（.env） | Windows 保留端口段随重启变化：先占 8080，2026-10-05 又占 **8451-8550**（含原用的 8500）→ 改用远离动态段的 18080 |
+| 3000 | api 宿主端口 | 无（默认） | 旧项目 dev 服务或旧容器占用时需先停 |
 | 3100 / 5174 | 本地开发（非 Docker）api / vite | 环境变量覆盖 | 旧项目 dev 服务占用 3000/5173 |
 | 5433 | （如启用）备用 postgres 宿主端口 | 未启用 | 5432 已有 postgres 实例/容器 |
+
+> 排查 Windows 保留端口段（端口"被占用"但无进程监听时先查这个）：
+> `netsh int ipv4 show excludedportrange protocol=tcp`

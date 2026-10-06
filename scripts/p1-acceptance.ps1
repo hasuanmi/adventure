@@ -1,6 +1,7 @@
 # P1 Acceptance Runner (A-O) - ASCII only
+# BASE defaults to the nginx host port in .env (WEB_PORT). Override with $env:ACCEPT_BASE if needed.
 $ErrorActionPreference = "Stop"
-$BASE = "http://localhost:8500/api"
+$BASE = if ($env:ACCEPT_BASE) { $env:ACCEPT_BASE } else { "http://localhost:18080/api" }
 $T = "$env:TEMP"
 
 function J($name, $json) { Set-Content "$T\$name.json" $json -NoNewline -Encoding Ascii }

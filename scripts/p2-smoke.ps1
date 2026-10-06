@@ -16,14 +16,29 @@ $ErrorActionPreference = "Continue"
 # console buffer is not readable; silence progress for reliability.
 $ProgressPreference = "SilentlyContinue"
 $BASE = if ($env:SMOKE_BASE) { $env:SMOKE_BASE } else { "http://localhost:3000/api" }
-$PSQL = "C:\Program Files\PostgreSQL\16\bin\psql.exe"
-$env:PGPASSWORD = "huahua_dev"
+
+# DB access (grant-count / cleanup checks). Overridable via PG* env vars so the same
+# script runs locally and in CI; when psql is unavailable those checks are SKIPped.
+$DBHOST = if ($env:PGHOST) { $env:PGHOST } else { "localhost" }
+$DBPORT = if ($env:PGPORT) { $env:PGPORT } else { "5432" }
+$DBUSER = if ($env:PGUSER) { $env:PGUSER } else { "huahua" }
+$DBNAME = if ($env:PGDATABASE) { $env:PGDATABASE } else { "huahua" }
+if (-not $env:PGPASSWORD) { $env:PGPASSWORD = "huahua_dev" }
+$PSQL = $env:PSQL
+if (-not $PSQL) {
+  $psqlCmd = Get-Command psql -ErrorAction SilentlyContinue
+  if ($psqlCmd) { $PSQL = $psqlCmd.Source }
+  elseif (Test-Path "C:\Program Files\PostgreSQL\16\bin\psql.exe") { $PSQL = "C:\Program Files\PostgreSQL\16\bin\psql.exe" }
+}
+$script:hasDb = [bool]$PSQL
+
 $stamp = Get-Random -Minimum 100000 -Maximum 999999
 $parent = "qa_p_$stamp"
 $child = "qa_c_$stamp"
 $lone = "qa_l_$stamp"
 $script:fail = 0
 $script:pass = 0
+$script:skip = 0
 $script:Verbose = $env:SMOKE_VERBOSE -eq "1"
 
 function Body($obj) {
@@ -68,16 +83,26 @@ function Check($name, $actual, $expected) {
   }
 }
 
+function CheckDb($name, $actual, $expected) {
+  if (-not $script:hasDb) {
+    $script:skip++
+    Write-Output ("SKIP  {0}  (psql not available; DB checks skipped)" -f $name)
+    return
+  }
+  Check $name $actual $expected
+}
+
 function Q($sql) {
+  if (-not $script:hasDb) { return "" }
   try {
-    $out = & $PSQL -h localhost -U huahua -d huahua -t -A -c $sql 2>&1
+    $out = & $PSQL -h $DBHOST -p $DBPORT -U $DBUSER -d $DBNAME -t -A -c $sql 2>&1
     return (($out | Where-Object { "$_" -notmatch '^psql:' }) -join "").Trim()
   } catch {
     return ""
   }
 }
 
-Write-Output "=== P2 SMOKE ($stamp) base=$BASE ==="
+Write-Output "=== P2 SMOKE ($stamp) base=$BASE db=$($script:hasDb) ==="
 
 # ---------- 0. register / login ----------
 $created = 0
@@ -152,7 +177,7 @@ Check "task completed after approve" ((J (Call "GET" "/tasks/$taskId" $ct $null)
 
 # reward granted exactly once
 $grants = Q "SELECT COUNT(*) FROM reward_grants g JOIN task_completions c ON c.id=g.completion_id WHERE c.task_id='$taskId';"
-Check "reward grants == 1" $grants "1"
+CheckDb "reward grants == 1" $grants "1"
 $growth = J (Call "GET" "/growth/me" $ct $null)
 Check "growth xp > 0" ([double]$growth.xp -gt 0) "True"
 
@@ -175,7 +200,7 @@ Check "PATCH endAt before stored startAt -> 400 invalid_range" (Code "PATCH" "/t
 $task4 = J (Call "POST" "/tasks" $pt (Body @{ childId = $childId; title = "FlipTask$stamp"; requiresApproval = $true; reviewerId = $parentId }))
 Call "POST" "/tasks/$($task4.id)/complete" $ct (Body @{ note = "pending" }) | Out-Null
 Check "PATCH approval off while pending -> 409" (Code "PATCH" "/tasks/$($task4.id)" $pt (Body @{ requiresApproval = $false })) "409"
-Check "no second completion created" (Q "SELECT COUNT(*) FROM task_completions WHERE task_id='$($task4.id)';") "1"
+CheckDb "no second completion created" (Q "SELECT COUNT(*) FROM task_completions WHERE task_id='$($task4.id)';") "1"
 
 # ---------- 5. cleanup ----------
 $userFilter = "(SELECT id FROM users WHERE username IN ('$parent','$child','$lone'))"
@@ -183,7 +208,8 @@ Q "DELETE FROM approval_records WHERE request_id IN (SELECT id FROM approval_req
 Q "DELETE FROM approval_requests WHERE applicant_id IN $userFilter OR reviewer_id IN $userFilter;" | Out-Null
 Q "DELETE FROM users WHERE username IN ('$parent','$child','$lone');" | Out-Null
 $left = Q "SELECT COUNT(*) FROM users WHERE username IN ('$parent','$child','$lone');"
-Check "cleanup removed smoke users" $left "0"
+CheckDb "cleanup removed smoke users" $left "0"
 
-Write-Output ("=== RESULT: pass={0} fail={1} ===" -f $script:pass, $script:fail)
+Write-Output ("=== RESULT: pass={0} fail={1} skip={2} ===" -f $script:pass, $script:fail, $script:skip)
+if ($script:skip -gt 0) { Write-Output "NOTE: DB checks were skipped (psql unavailable) - smoke test data may remain in the database." }
 if ($script:fail -gt 0) { exit 1 }
