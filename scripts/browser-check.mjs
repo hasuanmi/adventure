@@ -7,7 +7,7 @@
 // 用法：node scripts/browser-check.mjs [--base http://localhost:18080] [--out ./ui-shots]
 // 前置：Docker 栈已起（web/nginx + api + postgres），且能连到 postgres（用于清理测试数据）。
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, openSync, closeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -252,22 +252,52 @@ async function main() {
   mark(`启动浏览器 ${exe}`);
   const port = 9333 + Math.floor(Math.random() * 200);
   const profile = join(tmpdir(), `ui-check-${STAMP}`);
+  const chromeLog = join(tmpdir(), `ui-check-chrome-${STAMP}.log`);
+  const chromeLogFd = openSync(chromeLog, 'w');
   const browser = spawn(exe, [
-    '--headless=new',
+    // 用 --headless（Chrome 132+ 即新 headless；旧版也支持 CDP），比 --headless=new 跨版本更稳
+    '--headless',
     '--disable-gpu',
-    // CI（Linux root 容器）下必须关沙箱；本地 Windows 会忽略该参数
+    // CI（Linux root 容器）下必须关沙箱；本地 Windows 会忽略这些参数
     '--no-sandbox',
+    '--disable-setuid-sandbox',
     '--disable-dev-shm-usage',
     `--remote-debugging-port=${port}`,
+    '--remote-debugging-address=127.0.0.1',
     `--user-data-dir=${profile}`,
     '--no-first-run',
     '--no-default-browser-check',
+    '--disable-background-networking',
     '--window-size=1280,900',
     'about:blank',
-  ], { stdio: 'ignore' });
+  ], { stdio: ['ignore', chromeLogFd, chromeLogFd] });
+
+  /** 浏览器启动失败时，把 Chrome 自己的输出打出来（否则只能靠猜） */
+  const dumpChromeLog = (why) => {
+    let tail = '';
+    try {
+      tail = readFileSync(chromeLog, 'utf8').split('\n').filter(Boolean).slice(-25).join('\n  ');
+    } catch {
+      /* ignore */
+    }
+    console.error(`--- Chrome 日志（${why}）---\n  ${tail || '(无输出)'}\n--- /Chrome 日志 ---`);
+  };
 
   const wsUrl = await (async () => {
-    for (let i = 0; i < 40; i += 1) {
+    // 两条路径都试：
+    // ① user-data-dir 下的 DevToolsActivePort（puppeteer 用的方式，Chrome 自己写端口+路径）
+    // ② HTTP /json/version（最常见，但某些环境下端点不可达）
+    const devtoolsPortFile = join(profile, 'DevToolsActivePort');
+    const deadline = Date.now() + 60000; // CI 上 Chrome 冷启动可能明显更慢
+    for (;;) {
+      if (existsSync(devtoolsPortFile)) {
+        try {
+          const [p, path] = readFileSync(devtoolsPortFile, 'utf8').split('\n');
+          if (p && path) return `ws://127.0.0.1:${p.trim()}${path.trim()}`;
+        } catch {
+          /* 文件可能正在写，下一轮再试 */
+        }
+      }
       try {
         const res = await fetch(`http://127.0.0.1:${port}/json/version`);
         const j = await res.json();
@@ -275,10 +305,19 @@ async function main() {
       } catch {
         /* 还没起来 */
       }
+      // Chrome 已经退出 → 立刻失败并给出它自己的报错，不要白等 60 秒
+      if (browser.exitCode !== null) {
+        dumpChromeLog(`Chrome 已退出，exitCode=${browser.exitCode}`);
+        throw new Error(`浏览器启动即退出（exitCode=${browser.exitCode}），见上方 Chrome 日志`);
+      }
+      if (Date.now() > deadline) {
+        dumpChromeLog('等待调试端口超时 60s');
+        throw new Error('浏览器调试端口未就绪（60s 超时）');
+      }
       await sleep(300);
     }
-    throw new Error('浏览器调试端口未就绪');
   })();
+  mark('调试端口就绪');
 
   const cdp = new Cdp(wsUrl);
   await cdp.ready;
@@ -433,7 +472,13 @@ async function main() {
       /* ignore */
     }
     try {
+      closeSync(chromeLogFd);
+    } catch {
+      /* ignore */
+    }
+    try {
       rmSync(profile, { recursive: true, force: true });
+      rmSync(chromeLog, { force: true });
     } catch {
       /* ignore */
     }
