@@ -943,7 +943,10 @@ async function main() {
     const startMs = slot.start ? new Date(slot.start).getTime() : 0;
     const endMs = slot.end ? new Date(slot.end).getTime() : 0;
     check('默认开始时间不早于现在', startMs >= Date.now() - 60 * 1000, true);
-    check('默认时长为 60 分钟', Math.round((endMs - startMs) / 60000), 60);
+    // 默认时长 = 60 分钟；但 defaultTaskSlot() 在深夜会主动压缩到当天 23:59（不跨天，by design），
+    // 所以这里按"≤60 且 ≥55 分钟"断言，避免断言变成"几点跑才通过"的时间依赖。
+    const defaultMin = Math.round((endMs - startMs) / 60000);
+    check('默认时长为 60 分钟（深夜自动压缩到 23:59，允许 55–60）', defaultMin <= 60 && defaultMin >= 55, true);
     check('两个时间都可编辑（非 disabled/readonly）', await cdp.evaluate(
       `[...document.querySelectorAll('input[type="datetime-local"]')].every((i) => !i.disabled && !i.readOnly)`,
     ), true);
