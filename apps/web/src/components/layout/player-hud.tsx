@@ -48,7 +48,7 @@ export function PlayerHud({
     >
       {/* 昵称：头像右上区域 */}
       <span
-        className="absolute -top-3 right-0 max-w-[7rem] truncate text-[11px] font-extrabold tracking-wide text-panelLight"
+        className="absolute right-1 top-0 max-w-[7rem] truncate text-xs font-extrabold tracking-wide text-panelLight"
         data-hud-nickname
         style={{ textShadow: '1px 1px 0 rgba(0,0,0,0.35)' }}
       >
@@ -56,7 +56,7 @@ export function PlayerHud({
       </span>
 
       {/* 圆形头像 + 圆形像素装饰框（CSS 多层圆边） */}
-      <span className="relative block h-14 w-14 shrink-0" data-hud-avatar-frame>
+      <span className="relative z-10 block h-14 w-14 shrink-0" data-hud-avatar-frame>
         <img
           src={avatarUrl}
           alt=""
@@ -71,14 +71,14 @@ export function PlayerHud({
         {/* LV：压框左上角 */}
         <span
           data-hud-level-badge
-          className="absolute -left-2.5 -top-1 border-2 border-ink bg-panel px-1 text-[10px] font-extrabold leading-4 text-ink shadow-pixel"
+          className="absolute -left-2.5 -top-1 border-2 border-ink bg-panel px-1 text-[10px] font-extrabold leading-4 text-ink"
         >
           LV.{level}
         </span>
       </span>
 
       {/* XP：右下、与头像相连（-ml-1 贴住框边）、底边与头像底对齐（items-end + mb-1） */}
-      <span data-hud-xp-bar className="-ml-1 mb-1 block h-2.5 w-28 border-2 border-ink bg-panel" aria-hidden>
+      <span data-hud-xp-bar className="-ml-6 mb-1 block h-2.5 w-28 border-2 border-ink bg-panel" aria-hidden>
         <span
           data-hud-xp-fill
           className="block h-full bg-xp transition-[width] duration-500"
