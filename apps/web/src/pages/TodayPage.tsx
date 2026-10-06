@@ -5,7 +5,7 @@ import { Swords } from 'lucide-react';
 import { TaskDto } from '@huahua/shared-types';
 import { Empty } from '../components/ui/empty';
 import { Panel, PanelHeader } from '../components/ui/card';
-import { PixelBar } from '../components/ui/pixel-bar';
+import { AdventureProgress } from '../components/adventure-progress';
 import { Skeleton } from '../components/ui/skeleton';
 import { TaskCard } from '../components/task-card';
 import { WeekCheckin } from '../components/week-checkin';
@@ -19,7 +19,7 @@ import { TASK_ICON_ADVENTURE_URL } from '../lib/quest-icons';
 import { TODAY_TABS, TodayTabKey, todayTasks } from '../lib/today';
 
 // Today（docs/ui-reference.md §4 + docs/p2-ui-ux-review.md §8：
-// 今日任务分桶 + PixelBar 进度 + 状态筛选 + 待审批提示 + 新建入口）
+// 今日任务分桶 + 冒险进度条 + 状态筛选 + 待审批提示 + 新建入口）
 export function TodayPage() {
   const user = useUser();
   const [createOpen, setCreateOpen] = useState(false);
@@ -115,8 +115,26 @@ export function TodayPage() {
         <p className="mb-2 text-sm">
           已完成 {completedCount}/{scoped.length} 个任务 · 进度 {percent}%
         </p>
-        <PixelBar barColor="var(--ok)" percent={percent} />
-        <p className="mt-2 text-xs text-panelLight/80">继续加油，小冒险家！</p>
+        {/* 冒险进度条：多层像素边框 + 跟随百分比的进度标记 + 变化时的轻量动画
+            （统计逻辑不变；ready 用于避免首次加载误播"完成"动画） */}
+        <AdventureProgress percent={percent} ready={tasksQuery.isSuccess} />
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-panelLight/80">
+          {scoped.length > 0 && percent >= 100 ? (
+            <>
+              <img
+                src="/icons/chest.png"
+                alt=""
+                aria-hidden
+                className="h-4 w-4 [image-rendering:pixelated]"
+              />
+              <span data-adventure-done className="font-extrabold text-panelLight">
+                今日冒险完成！
+              </span>
+            </>
+          ) : (
+            '继续加油，小冒险家！'
+          )}
+        </p>
       </Panel>
 
       {/* 待审批提示（真实 API；仅审核人可见）→ 进入审批页处理 */}

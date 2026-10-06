@@ -90,7 +90,8 @@ Tailwind 侧必须写成 `rgb(var(--x-rgb) / <alpha-value>)`。**若写成 `var(
 
 | Component | 用途 | 外观 | 交互 | 当前项目建议实现方式 |
 |---|---|---|---|---|
-| PixelBar | 进度条（专注/冒险进度） | `h-4 border-2 border-ink` + 条纹渐变填充（`repeating-linear-gradient` + `color-mix`），底 `#e7d6b0` | `percent` 宽度过渡；`null` 时 100% 条纹态 | 复用同款 CSS（自研小组件）；等级/成长进度可用 |
+| PixelBar | 进度条（专注/六维进度） | `h-4 border-2 border-ink` + 条纹渐变填充（`repeating-linear-gradient` + `color-mix`），底 `#e7d6b0` | `percent` 宽度过渡；`null` 时 100% 条纹态 | 复用同款 CSS（自研小组件）；六维/成长进度仍用 |
+| **AdventureProgress** | **「今日冒险」进度条**（2026-10-06 新增） | **多层像素边框**：外层 `border-2 border-ink` + `bg-inkSoft`（暖棕层，在 2px padding 处露出）→ 内层 `border-2 border-ink bg-panelLight p-[3px]` → 条本体 `h-4 border-2 border-ink bg-panel`（**不贴外框**）；绿色条纹填充同 PixelBar | **进度标记**（角色头像）跟随百分比 `left = percent%`（非固定右侧）；变化时宽度 + 标记 `transition 620ms`；到达后标记 `pixel-marker-pop` 弹跳 + 5 枚 `pixel-spark` 粒子；100% 额外 `pixel-sheen` 高亮扫过；**首次加载不播放**（`ready` + 初始化基准）；`prefers-reduced-motion` 下关闭动画 | `apps/web/src/components/adventure-progress.tsx`；动画 keyframes 在 `index.css`；标记复用 `/avatar-girl-toon.png`，完成文案用 `/icons/chest.png` |
 | Button（pixel） | 主操作 | `border-2 border-ink px-4 py-2.5 font-bold text-white shadow-pixel`；变体 accent/ok/ghost | `active:translate-y-1` 按压下沉（阴影消失感）；`disabled:opacity-50` | 接入 shadcn Button 变体定制 pixel 风格 |
 | Panel/Card | 内容容器 | Panel：`border-2 border-ink bg-panel p-4 shadow-pixel`（直角）；Card：`rounded-xl border-ink/30` | — | shadcn Card 样式定制 |
 | Tag/Badge | 状态徽标 | `inline-flex border-2 border-ink px-2 py-0.5 text-xs font-bold`；tone accent/ok/primary/warning | — | shadcn Badge 定制 + 状态→色集中映射（Quorum STATUS_COLORS 模式） |

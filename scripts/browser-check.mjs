@@ -311,8 +311,9 @@ async function main() {
   const clashEnd = new Date(clashStart.getTime() + 60 * 60 * 1000);
   const clashColors = ['#3b82f6', '#4a9e6b'];
   const clashTitles = [`冲突A ${STAMP}`, `冲突B ${STAMP}`];
+  const clashIds = [];
   for (let i = 0; i < clashTitles.length; i += 1) {
-    await api('POST', '/tasks', parentToken, {
+    const res = await api('POST', '/tasks', parentToken, {
       childId,
       title: clashTitles[i],
       startAt: clashStart.toISOString(),
@@ -320,6 +321,7 @@ async function main() {
       requiresApproval: false,
       color: clashColors[i],
     });
+    clashIds.push(res.json?.id);
   }
 
   // ---------- 1. 启动无头浏览器 ----------
@@ -1204,6 +1206,125 @@ async function main() {
     const stillThere = await api('GET', '/tasks', childToken);
     const list = Array.isArray(stillThere.json) ? stillThere.json : (stillThere.json?.tasks ?? []);
     check('详情页删除后任务确实不在列表里', list.some((t) => t.id === detailTaskId) === false, true);
+
+    // ---------- 13e. 今日冒险进度条：像素外框 / 跟随标记 / 动画 / 100% 状态 ----------
+    // 先把「冲突A」推进到 in_progress，便于稍后行内点「完成」触发真实的进度变化
+    await api('POST', `/tasks/${clashIds[0]}/status`, childToken, { action: 'start' });
+    await cdp.send('Page.navigate', { url: `${BASE}/` });
+    await cdp.waitFor('[data-adventure-progress]');
+    await sleep(700);
+    const adv1 = await cdp.evaluate(`(() => {
+      const wrap = document.querySelector('[data-adventure-progress]');
+      const inner = wrap.firstElementChild;          // 米白内层（自带 2px 描边 + 3px 内边距）
+      const track = document.querySelector('[data-progress-track]');
+      const marker = document.querySelector('[data-progress-marker]');
+      const fill = document.querySelector('[data-progress-fill]');
+      const r = (el) => el.getBoundingClientRect();
+      const cs = (el) => getComputedStyle(el);
+      const tr = r(track);
+      const mr = r(marker);
+      const pct = Number(wrap.getAttribute('data-progress-percent'));
+      return {
+        pct,
+        // 多层边框：外层容器 2px 描边 + 其背景色即"暖棕层"（在 2px padding 处露出）
+        wrapBorder: parseFloat(cs(wrap).borderTopWidth) || 0,
+        wrapBandBg: cs(wrap).backgroundColor,
+        innerBorder: inner ? parseFloat(cs(inner).borderTopWidth) || 0 : 0,
+        innerBg: inner ? cs(inner).backgroundColor : null,
+        innerPad: inner
+          ? Math.round(tr.left - (r(inner).left + (parseFloat(cs(inner).borderLeftWidth) || 0)))
+          : -1,
+        trackBorder: parseFloat(cs(track).borderTopWidth) || 0,
+        trackBg: cs(track).backgroundColor,
+        trackH: Math.round(tr.height),
+        markerH: Math.round(mr.height),
+        markerRatio: Number((mr.height / tr.height).toFixed(2)),
+        markerOffset: Math.round((mr.left + mr.right) / 2 - (tr.left + (tr.width * pct) / 100)),
+        markerFromRight: Math.round(tr.right - (mr.left + mr.right) / 2),
+        fillTransition: cs(fill).transitionDuration,
+        markerTransition: cs(marker).transitionDuration,
+        pulseNow: Boolean(document.querySelector('[data-progress-marker][data-marker-pulse="true"]')),
+      };
+    })()`);
+    console.log(`      冒险进度条：${JSON.stringify(adv1)}`);
+    check('进度条有多层像素外框（外 2px 深棕 + 暖棕层）', adv1.wrapBorder === 2 && adv1.wrapBandBg === 'rgb(122, 92, 56)', true);
+    check('内层还有 2px 描边 + 米白底（多层像素边框）', adv1.innerBorder === 2 && adv1.innerBg === 'rgb(247, 237, 217)', true);
+    check('条本体不贴外框（内边距 ≥ 2px）', Number(adv1.innerPad) >= 2, true);
+    check('条本体自带 2px 描边 + 米色底（与页面像素 UI 一致）', adv1.trackBorder === 2 && adv1.trackBg === 'rgb(242, 229, 201)', true);
+    check('进度标记尺寸约条高 1–1.5 倍', Number(adv1.markerRatio) >= 0.9 && Number(adv1.markerRatio) <= 1.8, true);
+    check('进度标记跟随当前百分比（±3px）', Math.abs(Number(adv1.markerOffset)) <= 3, true);
+    check('进度标记不固定在最右端', Number(adv1.pct) >= 100 || Number(adv1.markerFromRight) > 10, true);
+    check('宽度与标记都有过渡（平滑增长而非瞬变）', adv1.fillTransition !== '0s' && adv1.markerTransition !== '0s', true);
+    check('首次加载不播放完成动画', adv1.pulseNow === false, true);
+    await cdp.shot('21-adventure-progress');
+
+    // 行内点「完成」→ 真实进度变化 → 应出现动画（标记弹跳 + 粒子）
+    await cdp.clickByText('[data-task-card-toggle]', `冲突A ${STAMP}`);
+    await sleep(400);
+    await cdp.clickByText('button', '✓ 完成');
+    let pulseSeen = false;
+    for (let i = 0; i < 12 && !pulseSeen; i += 1) {
+      await sleep(120);
+      pulseSeen = await cdp.evaluate(
+        `Boolean(document.querySelector('[data-progress-marker][data-marker-pulse="true"]'))`,
+      );
+    }
+    check('完成任务后进度条播放动画（标记弹跳/粒子）', pulseSeen, true);
+    await cdp.shot('22-adventure-progress-pulse');
+    await sleep(1400);
+    const adv2 = await cdp.evaluate(`(() => {
+      const wrap = document.querySelector('[data-adventure-progress]');
+      return {
+        pct: Number(wrap.getAttribute('data-progress-percent')),
+        pulse: Boolean(document.querySelector('[data-progress-marker][data-marker-pulse="true"]')),
+      };
+    })()`);
+    check('动画结束后恢复静止', adv2.pulse === false, true);
+    check('进度确实增加（统计随之变化）', adv2.pct > adv1.pct, true);
+
+    // 全部完成 → 100% 特殊状态。
+    // 注意：带审批的任务会卡在 pending 闸门（这是正确的业务行为），故先由家长批准待审批项。
+    const pendingApprovals = await api('GET', '/approvals?as=reviewer&status=pending', parentToken);
+    const approvalList = Array.isArray(pendingApprovals.json)
+      ? pendingApprovals.json
+      : (pendingApprovals.json?.requests ?? []);
+    for (const a of approvalList) {
+      await api('POST', `/approvals/${a.id}/approve`, parentToken, { comment: 'browser-check 自动批准' });
+    }
+    const allNow = await api('GET', '/tasks', childToken);
+    const allList = Array.isArray(allNow.json) ? allNow.json : (allNow.json?.tasks ?? []);
+    for (const t of allList) {
+      if (t.status === 'completed') continue;
+      try {
+        if (t.status !== 'in_progress') {
+          await api('POST', `/tasks/${t.id}/status`, childToken, { action: 'start' });
+        }
+        await api('POST', `/tasks/${t.id}/status`, childToken, { action: 'complete' });
+      } catch {
+        /* 极少数任务可能仍未通过；下方按实际百分比断言 */
+      }
+    }
+    await cdp.send('Page.navigate', { url: `${BASE}/` });
+    await cdp.waitFor('[data-adventure-progress]');
+    await sleep(800);
+    const advDone = await cdp.evaluate(`(() => {
+      const wrap = document.querySelector('[data-adventure-progress]');
+      const track = document.querySelector('[data-progress-track]');
+      const marker = document.querySelector('[data-progress-marker]');
+      const r = (el) => el.getBoundingClientRect();
+      return {
+        pct: Number(wrap.getAttribute('data-progress-percent')),
+        complete: wrap.getAttribute('data-progress-complete'),
+        doneText: (document.querySelector('[data-adventure-done]')?.textContent ?? '').trim(),
+        markerFromRight: Math.round(r(track).right - r(marker).right),
+        markerCenterFromRight: Math.round(r(track).right - (r(marker).left + r(marker).right) / 2),
+      };
+    })()`);
+    console.log(`      100% 状态：${JSON.stringify(advDone)}`);
+    check('全部完成时进度达到 100%', advDone.pct, 100);
+    check('100% 时进度标记移动到最右端（右缘贴终点）', Number(advDone.markerFromRight) <= 4, true);
+    check('100% 时文案变为「今日冒险完成！」', advDone.doneText, '今日冒险完成！');
+    await cdp.shot('23-adventure-complete');
   } finally {
     clearTimeout(watchdog);
     try {
