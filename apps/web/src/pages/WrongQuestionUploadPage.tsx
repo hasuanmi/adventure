@@ -284,10 +284,6 @@ export function WrongQuestionCapture({ variant = 'notebook' }: CaptureProps) {
             {error}
           </p>
         )}
-        <p className="mt-3 text-[11px] text-inkSoft">
-          模型：{status.data?.configured ? `${status.data.provider} · ${status.data.model}` : '未配置'} ·
-          密钥只在服务端使用，永不下发浏览器
-        </p>
       </Panel>
 
       {/* 直接录入 / 识别确认：**tab 下面直接就是需要填写的表单** */}

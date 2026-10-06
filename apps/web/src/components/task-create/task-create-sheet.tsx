@@ -11,11 +11,9 @@ import { rewardProfilesApi } from '../../lib/api/reward-profiles';
 import { taskFormSchema, type TaskFormValues } from '../../lib/task-form-schema';
 import { toDateInputValue, toLocalInputValue, defaultTaskSlot, endAtFromStart } from '../../lib/schedule';
 import {
-  categoryIconUrl,
   rewardProfileIconUrl,
 } from '../../lib/quest-icons';
 import { TASK_ICONS } from '../../lib/task-icons';
-import type { RewardProfileCategory } from '@huahua/shared-types';
 import { useUser } from '../../hooks/use-user';
 import { COLOR_PRESETS, PRIORITY_OPTIONS, SUBJECT_OPTIONS, WEEKDAY_REPEAT_OPTIONS } from '../../lib/constants';
 import { cn } from '../../lib/utils';
@@ -26,9 +24,7 @@ import { Label } from '../ui/label';
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
@@ -153,13 +149,7 @@ function TaskCreateSheetForm({
     if (!form.getValues('reviewerId') && singleParentId) form.setValue('reviewerId', singleParentId);
   }, [isEdit, hasFamily, singleChildId, singleParentId, form]);
 
-  const profileGroups: { category: string; label: string }[] = [
-    { category: 'daily', label: '日常' },
-    { category: 'world', label: '世界' },
-    { category: 'scenery', label: '风物' },
-    { category: 'custom', label: '自定义' },
-  ];
-
+  
   // 时间冲突提示：与"该孩子当天已有任务"比对（纯函数 findOverlaps 来自 shared-types，Mobile 可复用）。
   // 产品决策：**允许重叠**（家庭场景常见），所以这里只提示、不阻止保存；日程页会并排显示并标冲突。
   const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => tasksApi.list() });
@@ -370,37 +360,34 @@ function TaskCreateSheetForm({
             </div>
             <div>
               <Label>任务类型</Label>
-              <Select value={form.watch('rewardProfile')} onValueChange={(v) => form.setValue('rewardProfile', v)}>
+              <Select
+                value={form.watch('rewardProfile') || 'TYPE_DAILY'}
+                onValueChange={(v) => form.setValue('rewardProfile', v)}
+              >
                 <SelectTrigger>
                   <span className="flex items-center gap-2">
                     <img
-                      src={rewardProfileIconUrl(form.watch('rewardProfile'))}
+                      src={rewardProfileIconUrl(form.watch('rewardProfile') || 'TYPE_DAILY')}
                       alt=""
                       aria-hidden
                       className="h-5 w-5 [image-rendering:pixelated]"
                     />
-                    <SelectValue placeholder="默认（自定义任务）" />
+                    <SelectValue />
                   </span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">默认（自定义任务）</SelectItem>
-                  {profileGroups.map((g) => (
-                    <SelectGroup key={g.category}>
-                      <SelectLabel>
-                        <span className="flex items-center gap-1.5">
-                          <img
-                            src={categoryIconUrl(g.category as RewardProfileCategory)}
-                            alt=""
-                            aria-hidden
-                            className="h-4 w-4 [image-rendering:pixelated]"
-                          />
-                          {g.label}
-                        </span>
-                      </SelectLabel>
-                      {profiles.filter((p) => p.category === g.category).map((p) => (
-                        <SelectItem key={p.code} value={p.code}>{p.label}</SelectItem>
-                      ))}
-                    </SelectGroup>
+                  {profiles.map((p) => (
+                    <SelectItem key={p.code} value={p.code}>
+                      <span className="flex items-center gap-2">
+                        <img
+                          src={rewardProfileIconUrl(p.code)}
+                          alt=""
+                          aria-hidden
+                          className="h-4 w-4 [image-rendering:pixelated]"
+                        />
+                        {p.label}
+                      </span>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>

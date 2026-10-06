@@ -34,7 +34,7 @@ export function LearningPage() {
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-extrabold text-ink">AI 识别</span>
             <span className="block text-[11px] text-inkSoft">
-              拍照或输入题目 → 识别题干 · 解析 · 存进错题本（与「上传新题」同一功能）
+              拍照或输入题目 → 识别题干 · 解析 · 存进错题本
             </span>
           </span>
           <span className="shrink-0 text-xs font-extrabold text-inkSoft">→</span>
