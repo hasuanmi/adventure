@@ -51,7 +51,7 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
             alt=""
             aria-hidden
             data-growth-card-rays
-            style={{ width: 112, height: 112 }}
+            style={{ width: 176, height: 176 }}
             className="pixel-blink pointer-events-none absolute object-contain [image-rendering:pixelated]"
           />
 
@@ -60,7 +60,7 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
             data-growth-card-badge
             className={cn(
               'relative grid h-14 w-14 place-items-center rounded-full border-[3px] border-ink shadow-pixel',
-              claimed ? 'bg-ok/30' : 'bg-panelLight',
+              'bg-panelLight',
             )}
           >
             <img
