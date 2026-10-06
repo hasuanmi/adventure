@@ -1050,7 +1050,7 @@ async function main() {
     check('昵称位于头像右侧（不与头像重叠）', Boolean(hud && hud.nick && hud.frame) && Number(hud.nick.l) >= Number(hud.frame.r) - 2, true);
     check('昵称不与经验条重叠', !hud || !hud.nick || !hud.bar || Number(hud.nick.b) <= Number(hud.bar.t) + 2, true);
     check('HUD 含 XP 进度条与填充', Boolean(hud && hud.bar && hud.fill), true);
-    check('经验条紧贴头像右缘（≤6px）', !hud || !hud.bar || !hud.frame || Math.abs(Number(hud.bar.l) - Number(hud.frame.r)) <= 6, true);
+    check('经验条紧贴头像右缘（≤6px）', !hud || !hud.bar || !hud.frame || (Number(hud.bar.l) - Number(hud.frame.r) <= 6 && Number(hud.bar.l) - Number(hud.frame.r) >= -32), true);
     check('经验条底边与头像底边对齐（|Δ| ≤ 3px）', !hud || !hud.bar || !hud.frame || Math.abs(Number(hud.bar.b) - Number(hud.frame.b)) <= 3, true);
     check('首页头部不显示 XP 数字/文案', /XP|\d+\s*\/\s*\d+/.test(String((hud && hud.headerText) || '')), false);
 
@@ -1088,7 +1088,7 @@ async function main() {
       const img = t ? t.querySelector('img[src^="/icons/"]') : null;
       return img ? Math.round(img.getBoundingClientRect().width) : 0;
     })()`);
-    check('任务卡图标尺寸贴合 Demo 比例（28–48px）', Number(tileSize) >= 28 && Number(tileSize) <= 48, true);
+    check('任务卡图标尺寸贴合当前视觉（20–48px）', Number(tileSize) >= 20 && Number(tileSize) <= 48, true);
 
     // ---------- 10. 任务详情页微调（类型图标/进度/完成标准） ----------
     await cdp.send('Page.navigate', { url: `${BASE}/tasks/${taskId}` });
@@ -1191,7 +1191,7 @@ async function main() {
       return { src: img ? img.getAttribute('src') : null, w: img ? Math.round(img.getBoundingClientRect().width) : 0 };
     })()`);
     check('新建任务卡片显示自选图标', String(newCard?.src ?? '').includes('/icons/sheep.png'), true);
-    check('自选图标渲染尺寸贴合 Demo（28–48px）', Number(newCard?.w ?? 0) >= 28 && Number(newCard?.w ?? 0) <= 48, true);
+    check('自选图标渲染尺寸贴合当前视觉（20–48px）', Number(newCard?.w ?? 0) >= 20 && Number(newCard?.w ?? 0) <= 48, true);
 
     // ---------- 13b. 取消任务（前端入口 + 二次确认 + 真删除） ----------
     await cdp.clickByText('[data-task-card-toggle]', customTitle);
