@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Panel } from '../components/ui/card';
 import { Empty } from '../components/ui/empty';
 import { Skeleton } from '../components/ui/skeleton';
-import { TwoDayGrid } from '../components/schedule/two-day-grid';
+import { ScheduleGrid } from '../components/schedule/schedule-grid';
 import { WeekDateNav } from '../components/schedule/week-date-nav';
 import { TaskCreateSheet } from '../components/task-create/task-create-sheet';
 import { tasksApi } from '../lib/api/tasks';
@@ -13,6 +13,7 @@ import {
   dateAtMinute,
   taskAppliesToDay,
   toLocalInputValue,
+  weekDays7,
 } from '../lib/schedule';
 
 // 日程页（docs/task-create-and-schedule-review.md §7）
@@ -56,10 +57,11 @@ export function SchedulePage() {
   const tasks = tasksQuery.data ?? [];
   // 投影：startAt 落在当天，或周重复（repeatWeekdays）命中当天且 >= startAt 日期
   const byDay = (d: Date) => tasks.filter((t) => taskAppliesToDay(t, d));
-  const nextDate = addDays(selectedDate, 1);
+  // 一周 7 天（周一起）：横向拖动可看到其他日期的日程（用户要求）
+  const weekDates = weekDays7(selectedDate);
   // 未安排 N：startAt = null 且未完成（真实 API 数据计算，不 mock）
   const unScheduled = tasks.filter((t) => !t.startAt && t.status !== 'completed').length;
-  const hasPlan = byDay(selectedDate).length + byDay(nextDate).length > 0;
+  const hasPlan = weekDates.some((d) => byDay(d).length > 0);
 
   function openCreate(startAt?: string) {
     setSlotStartAt(startAt);
@@ -80,22 +82,22 @@ export function SchedulePage() {
         ＋ 新建任务
       </button>
 
-      <TwoDayGrid
+      <ScheduleGrid
         today={today}
-        days={[
-          { date: selectedDate, tasks: byDay(selectedDate) },
-          { date: nextDate, tasks: byDay(nextDate) },
-        ]}
+        focusDate={selectedDate}
+        days={weekDates.map((d) => ({ date: d, tasks: byDay(d) }))}
         onSelectTask={(t) => navigate(`/tasks/${t.id}`)}
         onSlotClick={(d, minute) => openCreate(toLocalInputValue(dateAtMinute(d, minute)))}
         onSelectDay={(d) => setSelectedDate(d)}
+        // 拖到边缘继续拖 → 切上/下一周（连续左右浏览）
+        onEdgePan={(direction) => setSelectedDate(addDays(selectedDate, direction * 7))}
       />
 
       {!hasPlan && (
         <Panel>
           <Empty
             icon="🗓️"
-            title="这两天暂无安排"
+            title="这周暂无安排"
             description="去「今日」创建任务，或点击上方「＋ 新建任务」并设置开始时间"
           />
         </Panel>

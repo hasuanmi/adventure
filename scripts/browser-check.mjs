@@ -464,26 +464,47 @@ async function main() {
       `[...document.querySelectorAll('div[aria-label="日期导航"] button')].findIndex((b) => b.getAttribute('aria-pressed') === 'true')`,
     );
     const headerAfter = (await gridHeaders())[0];
-    console.log(`      clicked: ${clicked.aria || clicked.label} | 左列标题: ${headerBefore} -> ${headerAfter}`);
+    console.log(`      clicked: ${clicked.aria || clicked.label} | 首列标题: ${headerBefore} -> ${headerAfter}`);
     check('点击日期条后选中项右移一天', pressed > 0, true);
-    check('点击日期条后网格标题随之变化', headerAfter !== headerBefore, true);
+    // 整周网格里"选中哪天"表现为**网格横向滚动聚焦到该列**（列标题随周不变）
+    const firstVisibleCol = () =>
+      cdp.evaluate(`(() => {
+        const sc = document.querySelector('[data-schedule-scroll]');
+        const base = sc.getBoundingClientRect().left + 56;
+        const cols = [...document.querySelectorAll('[data-day-col]')];
+        let best = -1, bestD = Infinity;
+        cols.forEach((c, i) => { const d = Math.abs(c.getBoundingClientRect().left - base); if (d < bestD) { bestD = d; best = i; } });
+        return best;
+      })()`);
+    const focusedCol = await firstVisibleCol();
+    console.log(`      网格聚焦列：${focusedCol}（日期条选中 ${pressed}）`);
+    check('点击日期条后网格横向滚动聚焦到该日', focusedCol, pressed);
     await cdp.shot('04-schedule-after-date-click');
 
-    // ---------- 4. 网格表头点击（今天/明天） ----------
+    // ---------- 4. 网格列头点击（点列头 → 回写选中日） ----------
     const beforeHeaderClick = await gridHeaders();
     const gridHeader = await cdp.evaluate(`(() => {
       const els = [...document.querySelectorAll('[data-day-header]')];
-      const b = els[1] ?? els[0];
+      const pressed = [...document.querySelectorAll('div[aria-label="日期导航"] button')].findIndex((b) => b.getAttribute('aria-pressed') === 'true');
+      // 选一个"当前不是选中日"的列，点它应当把选中日切过去
+      const idx = pressed === 2 ? 3 : 2;
+      const b = els[idx];
       if (!b) return null;
       const r = b.getBoundingClientRect();
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2, label: b.innerText.replace(/\\n/g, ' ') };
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, label: b.innerText.replace(/\\n/g, ' '), idx };
     })()`);
     if (gridHeader) {
       await cdp.clickAt(gridHeader.x, gridHeader.y);
       await sleep(800);
       const afterHeaderClick = await gridHeaders();
-      console.log(`      grid header click: ${gridHeader.label} | ${beforeHeaderClick[0]} -> ${afterHeaderClick[0]}`);
-      check('点击网格表头可切换该日日程', afterHeaderClick[0] !== beforeHeaderClick[0], true);
+      const pressedAfterHeader = await cdp.evaluate(
+        `[...document.querySelectorAll('div[aria-label="日期导航"] button')].findIndex((b) => b.getAttribute('aria-pressed') === 'true')`,
+      );
+      console.log(
+        `      grid header click: ${gridHeader.label}（第 ${gridHeader.idx} 列）| 首列 ${beforeHeaderClick[0]} -> ${afterHeaderClick[0]}；选中日 -> ${pressedAfterHeader}`,
+      );
+      check('点击网格列头把选中日切到该列', pressedAfterHeader, gridHeader.idx);
+      check('点击后网格聚焦回该列', await firstVisibleCol(), gridHeader.idx);
     } else {
       check('网格表头可点', 'not-found', 'found');
     }
@@ -598,7 +619,7 @@ async function main() {
     await cdp.send('Page.navigate', { url: `${BASE}/schedule` });
     await cdp.waitFor('[data-day-header]');
 
-    // ---------- 4e. 日程网格几何：表头/表体分格线对齐 + 两列等宽 + 格线可见 ----------
+    // ---------- 4e. 日程网格几何：表头/表体分格线对齐 + 每日列等宽 + 格线可见 + 横向可拖 ----------
     const gridGeo = await cdp.evaluate(`(() => {
       const headers = [...document.querySelectorAll('[data-day-header]')].map((e) => e.getBoundingClientRect());
       const cols = [...document.querySelectorAll('[data-day-col]')].map((e) => e.getBoundingClientRect());
@@ -607,11 +628,19 @@ async function main() {
       const bg = panel ? getComputedStyle(panel).backgroundColor : '';
       const rgb = (s) => (s.match(/\\d+(\\.\\d+)?/g) || []).map(Number);
       const lum = (s) => { const [r, g, b] = rgb(s); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+      const sc = document.querySelector('[data-schedule-scroll]');
+      // 表头与对应列是否左右对齐（逐列比较 x）
+      const maxDelta = Math.max(...headers.map((h, i) => (cols[i] ? Math.abs(h.left - cols[i].left) : 999)));
       return {
-        headerDivider: headers.length === 2 ? Math.round(headers[1].left) : null,
-        bodyDivider: cols.length === 2 ? Math.round(cols[1].left) : null,
+        dayCount: cols.length,
+        headerCount: headers.length,
+        maxHeaderColDelta: Math.round(maxDelta),
         headerWidths: headers.map((r) => Math.round(r.width)),
         bodyWidths: cols.map((r) => Math.round(r.width)),
+        equalWidthSpread: Math.max(...cols.map((r) => r.width)) - Math.min(...cols.map((r) => r.width)),
+        scrollWidth: sc ? sc.scrollWidth : 0,
+        clientWidth: sc ? sc.clientWidth : 0,
+        innerVerticalScroll: sc ? sc.scrollHeight - sc.clientHeight : 0,
         lineColor: lines[0] ?? null,
         bgColor: bg,
         lineLum: lines[0] ? Math.round(lum(lines[0])) : null,
@@ -619,14 +648,72 @@ async function main() {
       };
     })()`);
     console.log(
-      `      网格：表头分格 x=${gridGeo.headerDivider} / 表体 x=${gridGeo.bodyDivider}；` +
-        `列宽 表头[${gridGeo.headerWidths}] 表体[${gridGeo.bodyWidths}]；` +
+      `      网格：${gridGeo.dayCount} 列；表头/列最大错位 ${gridGeo.maxHeaderColDelta}px；` +
+        `列宽 [${gridGeo.bodyWidths.slice(0, 3)}…] 极差 ${gridGeo.equalWidthSpread}px；` +
+        `横向可滚 ${gridGeo.scrollWidth}>${gridGeo.clientWidth}；纵向内部可滚 ${gridGeo.innerVerticalScroll}px；` +
         `格线 ${gridGeo.lineColor}(亮度 ${gridGeo.lineLum}) vs 背景 ${gridGeo.bgColor}(亮度 ${gridGeo.bgLum})`,
     );
-    check('表头与表体的分格线对齐（|Δ| ≤ 2px）', Math.abs(gridGeo.headerDivider - gridGeo.bodyDivider) <= 2, true);
-    check('表头两列等宽（|Δ| ≤ 1px）', Math.abs(gridGeo.headerWidths[0] - gridGeo.headerWidths[1]) <= 1, true);
-    check('表体两列等宽（|Δ| ≤ 1px）', Math.abs(gridGeo.bodyWidths[0] - gridGeo.bodyWidths[1]) <= 1, true);
+    check('日程网格渲染整周 7 列（可左右拖动看其他日期）', Number(gridGeo.dayCount) === 7, true);
+    check('每列都有对应表头', Number(gridGeo.headerCount), Number(gridGeo.dayCount));
+    check('表头与其所在列左右对齐（|Δ| ≤ 2px）', Number(gridGeo.maxHeaderColDelta) <= 2, true);
+    check('各日列等宽（极差 ≤ 1px）', Number(gridGeo.equalWidthSpread) <= 1, true);
+    check(
+      '横向内容宽于容器（真的有可拖动的其他日期）',
+      Number(gridGeo.scrollWidth) > Number(gridGeo.clientWidth),
+      true,
+    );
+    check('网格自身不产生纵向滚动（整页滚动，原要求不回退）', Number(gridGeo.innerVerticalScroll) <= 1, true);
     check('格线比背景深（亮度差 ≥ 12，不是看不清的浅灰）', gridGeo.bgLum - gridGeo.lineLum >= 12, true);
+
+    // ---------- 4e2. 鼠标左右拖动真的能平移（用户报告的核心 bug） ----------
+    const dragResult = await cdp.evaluate(`(() => {
+      const sc = document.querySelector('[data-schedule-scroll]');
+      const r = sc.getBoundingClientRect();
+      return { before: Math.round(sc.scrollLeft), cx: Math.round(r.left + r.width / 2), cy: Math.round(r.top + 120) };
+    })()`);
+    // 按住往左拖 260px（内容向右推进）→ scrollLeft 应增大
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: dragResult.cx, y: dragResult.cy, button: 'left', clickCount: 1 });
+    for (let step = 1; step <= 8; step += 1) {
+      await cdp.send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x: dragResult.cx - step * 32,
+        y: dragResult.cy,
+        button: 'left',
+        buttons: 1,
+      });
+      await sleep(30);
+    }
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: dragResult.cx - 256, y: dragResult.cy, button: 'left', clickCount: 1 });
+    await sleep(400);
+    const afterDrag = await cdp.evaluate(`Math.round(document.querySelector('[data-schedule-scroll]').scrollLeft)`);
+    console.log(`      拖动：scrollLeft ${dragResult.before} → ${afterDrag}`);
+    check('鼠标左右拖动可平移日程（看到其他日期）', Number(afterDrag) > Number(dragResult.before), true);
+    // 拖动后表头与所在列仍然对齐（表头随列移动）
+    const alignedAfterDrag = await cdp.evaluate(`(() => {
+      const headers = [...document.querySelectorAll('[data-day-header]')].map((e) => e.getBoundingClientRect().left);
+      const cols = [...document.querySelectorAll('[data-day-col]')].map((e) => e.getBoundingClientRect().left);
+      return Math.round(Math.max(...headers.map((h, i) => Math.abs(h - cols[i]))));
+    })()`);
+    check('拖动后表头仍与所在列对齐（表头跟着一起动）', Number(alignedAfterDrag) <= 2, true);
+    await cdp.shot('40-schedule-hpan');
+
+    // 拖到最左继续拖 → 切到上一周（周日期整体前移）
+    const weekBefore = await cdp.evaluate(
+      `[...document.querySelectorAll('[data-day-header]')].map((e) => e.innerText.split('\\n')[0]).join(',')`,
+    );
+    await cdp.evaluate(`document.querySelector('[data-schedule-scroll]').scrollLeft = 0`);
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: dragResult.cx, y: dragResult.cy, button: 'left', clickCount: 1 });
+    for (let step = 1; step <= 6; step += 1) {
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: dragResult.cx + step * 30, y: dragResult.cy, button: 'left', buttons: 1 });
+      await sleep(30);
+    }
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: dragResult.cx + 180, y: dragResult.cy, button: 'left', clickCount: 1 });
+    await sleep(700);
+    const weekAfter = await cdp.evaluate(
+      `[...document.querySelectorAll('[data-day-header]')].map((e) => e.innerText.split('\\n')[0]).join(',')`,
+    );
+    console.log(`      边缘拖动：${weekBefore} → ${weekAfter}`);
+    check('在最左继续拖动 → 切到上一周（可连续浏览其他日期）', weekAfter !== weekBefore, true);
 
     // ---------- 4f. 当前时间线的胶囊标签在左侧时间轴列内 ----------
     const clock2 = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
@@ -647,8 +734,9 @@ async function main() {
     await sleep(400);
     const pill = await cdp.evaluate(`(() => {
       const label = document.querySelector('[data-current-time-label]');
-      const col = document.querySelector('[data-day-col]');
+      // 注意：整周网格里"今天"未必是第一列，必须取当前时间线**所在的那一列**来比
       const line = document.querySelector('[data-current-time-line]');
+      const col = line?.closest('[data-day-col]') ?? document.querySelector('[data-day-col]');
       if (!label || !col || !line) return null;
       const l = label.getBoundingClientRect();
       const c = col.getBoundingClientRect();
