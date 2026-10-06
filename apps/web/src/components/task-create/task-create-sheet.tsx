@@ -1,9 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import type { CreateTaskRequest, TaskDto } from '@huahua/shared-types';
+import { findOverlaps, type CreateTaskRequest, type TaskDto } from '@huahua/shared-types';
 import { ApiError } from '../../lib/api/client';
 import { familyApi } from '../../lib/api/family';
 import { tasksApi } from '../../lib/api/tasks';
@@ -160,7 +160,45 @@ function TaskCreateSheetForm({
     { category: 'custom', label: '自定义' },
   ];
 
-  async function onSubmit(values: TaskFormValues) {
+  // 时间冲突提示：与"该孩子当天已有任务"比对（纯函数 findOverlaps 来自 shared-types，Mobile 可复用）。
+  // 产品决策：**允许重叠**（家庭场景常见），所以这里只提示、不阻止保存；日程页会并排显示并标冲突。
+  const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => tasksApi.list() });
+  const startAtValue = form.watch('startAt');
+  const endAtValue = form.watch('endAt');
+  const childIdValue = form.watch('childId');
+  const conflicts = useMemo<{ id: string; start: number; end: number; title?: string }[]>(() => {
+    if (!startAtValue) return [];
+    const start = new Date(startAtValue);
+    if (Number.isNaN(start.getTime())) return [];
+    const end = endAtValue ? new Date(endAtValue) : new Date(start.getTime() + 30 * 60_000);
+    if (Number.isNaN(end.getTime())) return [];
+    const targetChildId = isParent ? childIdValue : user?.userId;
+    if (!targetChildId) return [];
+    const sameDay = (a: Date, b: Date) =>
+      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    const minutes = (d: Date) => d.getHours() * 60 + d.getMinutes();
+    const candidates = (tasksQuery.data ?? [])
+      .filter(
+        (t) =>
+          t.id !== task?.id &&
+          t.status !== 'completed' &&
+          t.childId === targetChildId &&
+          Boolean(t.startAt) &&
+          sameDay(new Date(t.startAt as string), start),
+      )
+      .map((t) => {
+        const s = new Date(t.startAt as string);
+        const e = t.endAt ? new Date(t.endAt) : new Date(s.getTime() + 30 * 60_000);
+        return { id: t.id, start: minutes(s), end: Math.max(minutes(e), minutes(s) + 15), title: t.title };
+      });
+    return findOverlaps({ start: minutes(start), end: Math.max(minutes(end), minutes(start) + 15) }, candidates);
+  }, [startAtValue, endAtValue, childIdValue, isParent, user?.userId, tasksQuery.data, task?.id]);
+
+  function onSubmit(values: TaskFormValues): void {
+    void doSubmit(values);
+  }
+
+  async function doSubmit(values: TaskFormValues) {
     setSubmitError(null);
     // 结束时间需晚于开始时间（客户端预检；服务端同规则）
     if (values.startAt && values.endAt && new Date(values.endAt).getTime() <= new Date(values.startAt).getTime()) {
@@ -297,6 +335,26 @@ function TaskCreateSheetForm({
           <p className="mt-1 text-xs text-inkSoft">
             默认「今天 · 下一个整点起 1 小时」，可直接改；填写开始+结束时间后，任务在日程显示为时段虚线块。
           </p>
+          {conflicts.length > 0 && (
+            <div
+              data-conflict-warning
+              className="mt-2 border-2 border-danger bg-danger/10 px-2 py-1.5"
+            >
+              <p className="text-xs font-extrabold text-danger">
+                ⚠️ 时间冲突：该时段已有 {conflicts.length} 个任务
+              </p>
+              <ul className="mt-0.5 space-y-0.5">
+                {conflicts.map((c) => (
+                  <li key={c.id} className="text-xs text-ink">
+                    · {c.title}（{String(Math.floor(c.start / 60)).padStart(2, '0')}:
+                    {String(c.start % 60).padStart(2, '0')}–
+                    {String(Math.floor(c.end / 60)).padStart(2, '0')}:{String(c.end % 60).padStart(2, '0')}）
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-[11px] text-inkSoft">仍可保存；两个任务会在日程上并排显示并标记冲突。</p>
+            </div>
+          )}
         </section>
 
         {/* 任务设置 */}

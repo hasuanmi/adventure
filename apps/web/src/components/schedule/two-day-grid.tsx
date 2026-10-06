@@ -1,4 +1,5 @@
 import type { TaskDto } from '@huahua/shared-types';
+import { assignLanes } from '@huahua/shared-types';
 import { cn } from '../../lib/utils';
 import {
   SCHEDULE_END_MIN,
@@ -68,10 +69,10 @@ export function TwoDayGrid({ days, today, onSelectTask, onSlotClick, onSelectDay
 
   return (
     <div className="border-2 border-ink bg-panel shadow-pixel">
-      {/* 时间轴主体（07:30–21:30）：**表头与表体同处一个滚动容器** →
-          列宽与分格线天然一致（此前表头在外面，表体滚动条占 10px → 分格线差 5px，用户实测反馈）。
-          表头 sticky top-0 保持固定，左侧刻度栏 sticky left-0 保持固定。 */}
-      <div className="relative max-h-[62vh] overflow-auto">
+      {/* 时间轴主体（07:30–21:30）：**不再内部滚动** —— 整页（含上方日期条）一起滚动，
+          表头 sticky 固定在视口顶部（用户要求："日程表整个可以滑动，滑动后上方日历跟着滚动"）。
+          表头与表体同处一个容器 → 列宽/分格线天然一致。 */}
+      <div className="relative" data-schedule-scroll>
         {/* 日期 Header：与表体同一套结构（w-14 gutter + border-r-2 + grid-cols-2 + divide-x-2） */}
         <div className="sticky top-0 z-30 flex border-b-2 border-ink bg-panel">
           <div className="sticky left-0 z-30 w-14 shrink-0 border-r-2 border-ink bg-panel" />
@@ -136,6 +137,15 @@ export function TwoDayGrid({ days, today, onSelectTask, onSlotClick, onSelectDay
           <div className="grid flex-1 grid-cols-2 divide-x-2 divide-ink/40">
             {days.map((d) => {
               const isToday = isSameDay(d.date, today);
+              // 车道打包：重叠任务**并排**显示 + 标冲突（纯函数来自 shared-types，Mobile 可复用）
+              const ranges = d.tasks
+                .filter((t) => t.startAt)
+                .map((t) => {
+                  const s = minuteOfDay(parseIso(t.startAt as string));
+                  const e = t.endAt ? minuteOfDay(parseIso(t.endAt)) : s + 30;
+                  return { id: t.id, start: s, end: Math.max(e, s + 15), title: t.title };
+                });
+              const laneOf = new Map(assignLanes(ranges).map((a) => [a.id, a]));
               return (
                 <div
                   key={d.date.toISOString()}
@@ -165,11 +175,22 @@ export function TwoDayGrid({ days, today, onSelectTask, onSlotClick, onSelectDay
                         ? Math.max(20, (durationMin / 60) * SCHEDULE_HOUR_PX)
                         : 24;
                     const top = Math.min(Math.max(rawTop, 0), Math.max(0, SCHEDULE_TOTAL_PX - height));
+                    const lane = laneOf.get(t.id);
+                    const laneCount = lane?.laneCount ?? 1;
+                    const widthPct = 100 / laneCount;
                     return (
                       <div
                         key={t.id}
-                        className="absolute inset-x-1 z-10"
-                        style={{ top, height }}
+                        data-task-block
+                        data-lane={(lane?.lane ?? 0) + 1}
+                        data-lane-count={laneCount}
+                        className="absolute z-10"
+                        style={{
+                          top,
+                          height,
+                          left: `calc(${(lane?.lane ?? 0) * widthPct}% + 3px)`,
+                          width: `calc(${widthPct}% - 5px)`,
+                        }}
                       >
                         <ScheduleChip
                           variant="task"
@@ -177,6 +198,7 @@ export function TwoDayGrid({ days, today, onSelectTask, onSlotClick, onSelectDay
                           timeLabel={formatHM(start)}
                           color={t.color ?? undefined}
                           completed={t.status === 'completed'}
+                          conflicting={laneCount > 1}
                           onClick={onSelectTask ? () => onSelectTask(t) : undefined}
                           className="h-full"
                         />

@@ -297,6 +297,20 @@ async function main() {
   const task2Id = createdTask2.json?.id;
   check('prepare: 两个任务已创建', Boolean(taskId && task2Id), true);
 
+  // 两个**完全同时间段**的任务（15:00–16:00）→ 验证"冲突显示 + 并排展示"
+  const clashStart = new Date();
+  clashStart.setHours(15, 0, 0, 0);
+  const clashEnd = new Date(clashStart.getTime() + 60 * 60 * 1000);
+  for (const title of [`冲突A ${STAMP}`, `冲突B ${STAMP}`]) {
+    await api('POST', '/tasks', parentToken, {
+      childId,
+      title,
+      startAt: clashStart.toISOString(),
+      endAt: clashEnd.toISOString(),
+      requiresApproval: false,
+    });
+  }
+
   // ---------- 1. 启动无头浏览器 ----------
   const exe = EDGE_CANDIDATES.find((p) => existsSync(p));
   if (!exe) throw new Error('找不到 Chromium 内核浏览器（Edge/Chrome）');
@@ -648,6 +662,56 @@ async function main() {
     }
     if (clock2?.identifier) await cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: clock2.identifier });
 
+    // ---------- 4g. 整页滚动（上方日期条跟着滚走，表头仍固定） ----------
+    const scrollInfo = await cdp.evaluate(`(() => {
+      const sc = document.querySelector('[data-schedule-scroll]');
+      const main = document.querySelector('main');
+      const strip = document.querySelector('div[aria-label="日期导航"]');
+      const header = document.querySelector('[data-day-header]');
+      if (!sc || !main || !strip || !header) return null;
+      main.scrollTop = 0;
+      const before = { strip: Math.round(strip.getBoundingClientRect().top), header: Math.round(header.getBoundingClientRect().top) };
+      main.scrollTop = 240;
+      const after = {
+        strip: Math.round(strip.getBoundingClientRect().top),
+        header: Math.round(header.getBoundingClientRect().top),
+        mainTop: Math.round(main.getBoundingClientRect().top),
+      };
+      return { inner: sc.scrollHeight - sc.clientHeight, before, after };
+    })()`);
+    if (scrollInfo) {
+      console.log(
+        `      滚动：网格自身可滚 ${scrollInfo.inner}px；日期条 ${scrollInfo.before.strip}→${scrollInfo.after.strip}；` +
+          `表头 ${scrollInfo.before.header}→${scrollInfo.after.header}（main 顶 ${scrollInfo.after.mainTop}）`,
+      );
+      check('日程网格自身不再内部滚动（整页一起滚）', scrollInfo.inner <= 1, true);
+      check('滚动后上方日期条跟着滚走', scrollInfo.after.strip < scrollInfo.before.strip - 50, true);
+      check('滚动后表头仍固定在顶部', Math.abs(scrollInfo.after.header - scrollInfo.after.mainTop) <= 24, true);
+    } else {
+      check('能取到日程滚动容器/日期条/表头', 'not-found', 'found');
+    }
+
+    // ---------- 4h. 时间冲突：并排显示 + 冲突标记 ----------
+    await cdp.evaluate(`(() => { const m = document.querySelector('main'); if (m) m.scrollTop = 0; })()`);
+    await sleep(300);
+    const clash = await cdp.evaluate(`(() => {
+      const blocks = [...document.querySelectorAll('[data-task-block]')].filter((b) => (b.textContent || '').includes('冲突'));
+      return {
+        count: blocks.length,
+        blocks: blocks.map((b) => {
+          const r = b.getBoundingClientRect();
+          return { left: Math.round(r.left), width: Math.round(r.width), lane: b.getAttribute('data-lane'), lanes: b.getAttribute('data-lane-count') };
+        }),
+        marked: document.querySelectorAll('[data-schedule-chip][data-conflict="true"]').length,
+      };
+    })()`);
+    console.log(`      冲突：${clash.count} 个块 ${JSON.stringify(clash.blocks)}；标记冲突 ${clash.marked} 个`);
+    check('同时间段的两个任务都渲染（不互相遮挡）', clash.count, 2);
+    check('两个重叠任务分属不同车道', new Set(clash.blocks.map((b) => b.lane)).size, 2);
+    check('重叠任务并排等宽（各约半列）', Math.abs(clash.blocks[0].width - clash.blocks[1].width) <= 2, true);
+    check('重叠任务被标记冲突', clash.marked >= 2, true);
+    await cdp.shot('17-schedule-conflict');
+
     // ---------- 5. 新建任务：开始/结束时间默认今天 ----------
     await cdp.send('Page.navigate', { url: `${BASE}/` });
     await cdp.waitFor(`button`);
@@ -903,6 +967,49 @@ async function main() {
     })()`);
     check('新建任务卡片显示自选图标', String(newCard?.src ?? '').includes('/icons/sheep.png'), true);
     check('自选图标渲染尺寸贴合 Demo（28–48px）', Number(newCard?.w ?? 0) >= 28 && Number(newCard?.w ?? 0) <= 48, true);
+
+    // ---------- 13b. 取消任务（前端入口 + 二次确认 + 真删除） ----------
+    await cdp.clickByText('[data-task-card-toggle]', customTitle);
+    await sleep(400);
+    await cdp.clickSelector('[data-cancel-task]');
+    await sleep(400);
+    const dialogOpen = await cdp.evaluate(
+      `Boolean([...document.querySelectorAll('[role="alertdialog"] h2, [role="alertdialog"] *')].find((e) => (e.textContent || '').includes('取消这个任务')))`,
+    );
+    check('取消任务有二次确认弹窗', dialogOpen, true);
+    await cdp.clickSelector('[data-confirm-cancel]');
+    await sleep(2000);
+    const afterCancel = await cdp.evaluate(
+      `[...document.querySelectorAll('[data-task-card-toggle]')].some((e) => e.textContent.includes(${JSON.stringify(customTitle)}))`,
+    );
+    check('确认后任务从列表消失（软删除生效）', afterCancel, false);
+    await cdp.shot('18-after-cancel');
+
+    // ---------- 13c. 创建/编辑时的冲突提示（不阻止保存） ----------
+    await cdp.clickByText('button', '新建任务');
+    await cdp.waitFor('input[name="startAt"]');
+    await cdp.evaluate(`(() => {
+      const setVal = (sel, val) => {
+        const el = document.querySelector(sel);
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(el, val);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const day = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      setVal('input[name="startAt"]', day + 'T15:10');
+      setVal('input[name="endAt"]', day + 'T15:40');
+    })()`);
+    await sleep(600);
+    const warn = await cdp.evaluate(`(() => {
+      const el = document.querySelector('[data-conflict-warning]');
+      return el ? (el.innerText || '').replace(/\\n/g, ' | ') : null;
+    })()`);
+    console.log(`      冲突提示：${warn}`);
+    check('时间与已有任务重叠时给出冲突提示', Boolean(warn && warn.includes('时间冲突')), true);
+    check('冲突提示列出冲突任务', String(warn ?? '').includes('冲突A'), true);
+    await cdp.shot('19-conflict-warning');
   } finally {
     clearTimeout(watchdog);
     try {

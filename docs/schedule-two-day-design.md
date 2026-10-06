@@ -38,6 +38,7 @@
 1. **TaskLabs CalendarWeek 没有"当前时间竖线"**——只有今日列高亮（`bg-primary/5`）+ 表头实心圆。此前 `docs/p2-ui-ux-review.md §6` 写「TaskLabs CalendarWeek 有当前时间指示」**不准确**，予以修正。
 2. **没有全天事件栏**：`allDay` 事件在周/日视图无特殊处理，按 `startAt` 定位渲染成普通块（00:00 起即整列大块）。
 3. **没有重叠车道打包**：重叠事件绝对定位直接互相覆盖（DOM 顺序后者在上）；月视图仅切片堆叠+「+N more」。车道算法只有 Kaneo `packWeekLanes`（P5 月视图再考虑）。
+   → **2026-10-06 更新**：我们自己实现了车道打包并用于**两日视图**（用户要求"同时间任务不能互相遮挡、要显示冲突"）：`packages/shared-types/src/schedule-conflict.ts` 的 `assignLanes`（区间图贪心着色，思路参考 Kaneo `packWeekLanes`，自写实现），日程上重叠任务并排、红框标冲突；创建/编辑时给出冲突提示（**不阻止保存**——家庭场景允许并行安排）。
 4. **TaskLabs 周视图任务=时间点 chip**：任务仅有 dueDate（带时刻），渲染 24px 高虚线 chip，无"任务时段块"概念。
 5. **Task/Event 零关联**：tasks 与 calendarEvents 无外键，日历页并行查询混合渲染（实色 vs 虚线）——与本项目 v1.2 决策一致。
 

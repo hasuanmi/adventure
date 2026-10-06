@@ -9,6 +9,8 @@ export interface ScheduleChipProps {
   color?: string;
   /** Task 完成态：半透明 + 删除线 + ✓ */
   completed?: boolean;
+  /** 与同一天其它任务时间重叠（展示层标记，不阻止保存） */
+  conflicting?: boolean;
   onClick?: () => void;
   className?: string;
 }
@@ -21,6 +23,7 @@ export function ScheduleChip({
   timeLabel,
   color,
   completed,
+  conflicting,
   onClick,
   className,
 }: ScheduleChipProps) {
@@ -31,11 +34,14 @@ export function ScheduleChip({
       onClick={onClick}
       data-variant={variant}
       data-schedule-chip
+      data-conflict={conflicting ? 'true' : undefined}
       className={cn(
         'flex w-full items-center gap-1 overflow-hidden px-1.5 py-0.5 text-left text-[11px] font-bold transition active:translate-y-0.5',
         isTask
           ? 'border-2 border-dashed border-inkSoft bg-panel text-ink'
           : 'border-2 border-transparent text-white shadow-pixel',
+        // 冲突：红色实线描边压过虚线，一眼看出"这两件撞了"
+        isTask && conflicting && 'border-solid border-danger bg-danger/10',
         completed && 'opacity-50',
         className,
       )}
@@ -48,6 +54,7 @@ export function ScheduleChip({
           style={{ backgroundColor: color }}
         />
       )}
+      {conflicting && <span className="shrink-0 text-[9px] text-danger">⚠</span>}
       {timeLabel && (
         <span className={cn('shrink-0 text-[9px]', isTask ? 'text-inkSoft' : 'text-white/80')}>
           {timeLabel}

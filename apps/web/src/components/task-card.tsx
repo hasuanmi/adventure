@@ -4,6 +4,17 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown } from 'lucide-react';
 import { TaskDto, TaskStatusAction } from '@huahua/shared-types';
 import { Panel } from './ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from './ui/alert-dialog';
 import { TaskStatusBadge } from './ui/status-badge';
 import { PixelBar } from './ui/pixel-bar';
 import { ApiError } from '../lib/api/client';
@@ -27,7 +38,7 @@ const INLINE_ACTION: Partial<Record<string, { action: TaskStatusAction; label: s
   returned: { action: 'resume', label: '↻ 继续' },
 };
 
-export function TaskCard({ task }: { task: TaskDto }) {
+export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: () => void }) {
   const user = useUser();
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
@@ -35,6 +46,26 @@ export function TaskCard({ task }: { task: TaskDto }) {
   const progress = taskProgress(task.status);
   const action = INLINE_ACTION[task.status];
   const isOwnChild = user?.role === 'child' && task.childId === user.userId;
+
+  // 取消任务（软删除）：完成后由父级列表负责跳转/刷新
+  const removeMutation = useMutation({
+    mutationFn: () => tasksApi.remove(task.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['approvals'] });
+      setNotice('任务已取消');
+    },
+    onError: (err) => {
+      const e = err instanceof ApiError ? err : null;
+      setNotice(
+        e?.status === 409
+          ? '已完成的任务不能取消'
+          : e?.status === 403
+            ? '你没有权限取消这个任务'
+            : '取消失败，请稍后再试',
+      );
+    },
+  });
 
   const mutation = useMutation({
     mutationFn: (a: TaskStatusAction) => tasksApi.changeStatus(task.id, { action: a }),
@@ -176,6 +207,45 @@ export function TaskCard({ task }: { task: TaskDto }) {
               >
                 编辑
               </Link>
+            )}
+            {/* 取消任务（软删除；后端 DELETE /tasks/:id，已完成任务不可取消）
+                原先前端没有任何取消入口，用户反馈"任务没有取消功能" */}
+            {task.status !== 'completed' && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    type="button"
+                    data-cancel-task
+                    className="border-2 border-danger/60 bg-panelLight px-3 py-2 text-sm font-bold text-danger transition hover:bg-danger/10"
+                  >
+                    取消任务
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>取消这个任务？</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      「{task.title}」将被取消（软删除，不再出现在今日与日程）。已完成的任务不能取消。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>再想想</AlertDialogCancel>
+                    <AlertDialogAction
+                      data-confirm-cancel
+                      onClick={() => {
+                        if (onCancelled) {
+                          onCancelled();
+                          return;
+                        }
+                        setNotice(null);
+                        removeMutation.mutate();
+                      }}
+                    >
+                      确认取消
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
           </div>
         </div>
