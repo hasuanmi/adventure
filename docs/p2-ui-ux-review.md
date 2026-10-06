@@ -101,7 +101,7 @@
 - **布局**：顶部日期标题行（「今天 10月5日 周一」/「明天 10月6日 周二」，参考 TwoDayView 自绘表头）；下方**固定 07:30–21:30 两列时间轴**（左 gutter 时间刻度）。
 - **Task 投影**：有 `startAt/endAt` 的任务以**虚线块**显示在时间轴（TaskLabs dashed chip 语义），点击进任务详情；`dueDate` 任务可显示为当日"截止"标签（仅展示层投影，不改模型）。
 - **Event 预留**：`allDay` 区（顶部全天条）+ 时间段**实色块**（按 color），本阶段 API 未建 → 仅布局预留，不渲染假数据。
-- **当前时间线**：红/高亮竖线标"现在"。**修正（2026-10-05）：TaskLabs CalendarWeek 实际没有当前时间指示**（源码仅今日列高亮 + 表头实心圆），此线是我们自己的增强——详见 `docs/schedule-two-day-design.md §3`。
+- **当前时间线**：红/高亮**横线**标"现在"（左端像素方块 + 右端 `HH:mm` 标签；2026-10-06 由竖线改为横线，用户实测反馈）。**修正（2026-10-05）：TaskLabs CalendarWeek 实际没有当前时间指示**（源码仅今日列高亮 + 表头实心圆），此线是我们自己的增强——详见 `docs/schedule-two-day-design.md §3`。
 - **视觉**：像素桥接（Panel/ink 描边/硬阴影）；Task 虚线=inkSoft、Event 实色=color。
 - **实现建议**：优先考虑"直接复用 react-calendar CalTimeGridView + 旧项目像素桥接"（MIT、已验证）或按 TaskLabs 算法自研；**本轮不安装，待确认**。
 

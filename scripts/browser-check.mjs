@@ -461,23 +461,92 @@ async function main() {
     }
     await cdp.shot('05-schedule-after-header-click');
 
-    // ---------- 4b. 底部导航不得遮挡内容（日程页实测被压住过） ----------
-    await cdp.evaluate(`window.scrollTo(0, document.body.scrollHeight)`);
+    // ---------- 4b. 底部导航不得遮挡内容（用户实测：日程网格被浮层导航压住） ----------
+    // 结构保证：main 是 flex-1 的滚动容器，nav 是 shell 的独立一行 → main 底 <= nav 顶
+    const layout = await cdp.evaluate(`(() => {
+      const main = document.querySelector('main');
+      const nav = document.querySelector('nav');
+      if (!main || !nav) return null;
+      const m = main.getBoundingClientRect();
+      const n = nav.getBoundingClientRect();
+      return { mainBottom: Math.round(m.bottom), navTop: Math.round(n.top), gap: Math.round(n.top - m.bottom) };
+    })()`);
+    if (layout) {
+      console.log(`      布局：main 底 ${layout.mainBottom} / nav 顶 ${layout.navTop}（gap ${layout.gap}px）`);
+      check('内容区与底部导航不重叠（结构性）', layout.gap >= -1, true);
+    } else {
+      check('能取到 main 与 nav 的位置', 'not-found', 'found');
+    }
+    // 日程页网格滚到底后也不得越过导航顶
+    await cdp.evaluate(`(() => { const m = document.querySelector('main'); if (m) m.scrollTop = m.scrollHeight; })()`);
     await sleep(400);
     const overlap = await cdp.evaluate(`(() => {
       const nav = document.querySelector('nav');
       const grid = document.querySelector('[data-day-header]')?.closest('div.border-2');
-      if (!nav || !grid) return null;
+      const main = document.querySelector('main');
+      if (!nav || !grid || !main) return null;
       const n = nav.getBoundingClientRect();
       const g = grid.getBoundingClientRect();
-      return { gridBottom: Math.round(g.bottom), navTop: Math.round(n.top), gap: Math.round(n.top - g.bottom) };
+      const m = main.getBoundingClientRect();
+      // 视觉可见范围受 main 盒子裁剪：取 grid 底与 main 底中较小者
+      const visibleBottom = Math.min(g.bottom, m.bottom);
+      return { gridBottom: Math.round(g.bottom), mainBottom: Math.round(m.bottom), navTop: Math.round(n.top), gap: Math.round(n.top - visibleBottom) };
     })()`);
     if (overlap) {
-      console.log(`      滚到底：网格底 ${overlap.gridBottom} vs 导航顶 ${overlap.navTop}（gap ${overlap.gap}px）`);
-      check('底部导航不遮挡日程网格', overlap.gap >= 0, true);
+      console.log(`      滚到底：网格可见底 ${Math.min(overlap.gridBottom, overlap.mainBottom)} vs 导航顶 ${overlap.navTop}（gap ${overlap.gap}px）`);
+      check('日程网格滚到底也不被导航遮住', overlap.gap >= -1, true);
     } else {
       check('能取到网格与导航位置', 'not-found', 'found');
     }
+
+    // ---------- 4c. 当前时间线必须是**横线**（用户实测反馈：原来是竖线） ----------
+    const timeLine = await cdp.evaluate(`(() => {
+      const el = document.querySelector('[data-current-time-line]');
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height), text: (el.textContent || '').trim() };
+    })()`);
+    if (timeLine) {
+      console.log(`      当前时间线：${timeLine.w}x${timeLine.h} 标签=${timeLine.text}`);
+      check('当前时间线是横线（宽 >> 高）', timeLine.w >= timeLine.h * 5, true);
+      check('当前时间线带 HH:mm 标签', /^\d{2}:\d{2}$/.test(timeLine.text), true);
+    } else {
+      console.log('      当前时间线：此刻不在 07:30–21:30，改为固定时钟（14:00）覆盖');
+    }
+
+    // ---------- 4d. 固定时钟覆盖"当前时间线=横线"（不依赖真实时间） ----------
+    const clock = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `
+        (() => {
+          const RealDate = Date;
+          const fixed = new RealDate(2026, 9, 6, 14, 0, 0).getTime(); // 本地 2026-10-06 14:00
+          class MockDate extends RealDate {
+            constructor(...args) { if (args.length === 0) super(fixed); else super(...args); }
+            static now() { return fixed; }
+          }
+          window.Date = MockDate;
+        })();
+      `,
+    });
+    await cdp.send('Page.navigate', { url: `${BASE}/schedule` });
+    await cdp.waitFor('[data-day-header]');
+    await sleep(600);
+    const fixedLine = await cdp.evaluate(`(() => {
+      const el = document.querySelector('[data-current-time-line]');
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height), text: (el.textContent || '').trim() };
+    })()`);
+    check('固定时钟下当前时间线存在', Boolean(fixedLine), true);
+    if (fixedLine) {
+      console.log(`      固定 14:00：时间线 ${fixedLine.w}x${fixedLine.h} 标签=${fixedLine.text}`);
+      check('当前时间线是横线（宽 >> 高）', fixedLine.w >= fixedLine.h * 5, true);
+      check('当前时间线标签为 14:00', fixedLine.text, '14:00');
+    }
+    await cdp.shot('15-schedule-current-time-line');
+    if (clock?.identifier) await cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: clock.identifier });
+    await cdp.send('Page.navigate', { url: `${BASE}/schedule` });
+    await cdp.waitFor('[data-day-header]');
 
     // ---------- 5. 新建任务：开始/结束时间默认今天 ----------
     await cdp.send('Page.navigate', { url: `${BASE}/` });

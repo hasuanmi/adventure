@@ -39,9 +39,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-brandBg text-ink">
+    <div className="flex h-[100dvh] flex-col bg-brandBg text-ink">
       {/* HUD 顶部（docs/ui-reference.md §2） */}
-      <header className="border-b-4 border-ink bg-ink text-panelLight">
+      <header className="shrink-0 border-b-4 border-ink bg-ink text-panelLight">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
           {/* 左上角：小女孩头像 + 等级经验栏 → 点击进成长页（用户要求：不用底部导航放成长） */}
           <Link
@@ -107,30 +107,34 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* 内容区：移动窄栏 / 桌面加宽（docs/ui-reference.md §2）
-          pb 需大于底部导航高度：导航是 sticky bottom-2，否则内容会被压在导航下面
-          （日程页的 62vh 网格实测被遮住，见 scripts/browser-check.mjs） */}
-      <main className="mx-auto w-full max-w-md px-3 pb-28 pt-4 md:max-w-2xl">{children}</main>
+      {/* 内容区：**自身滚动**（flex-1 + overflow-y-auto），导航是 shell 的独立一行 →
+          任何滚动位置都不会被导航压住（此前用 `sticky bottom-2` 浮层 + pb-28 兜底，
+          日程页 62vh 网格仍会被盖住，用户实测反馈）。 */}
+      <main className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-3 pb-4 pt-4 md:max-w-2xl">
+        {children}
+      </main>
 
-      {/* 底部两格导航（今日｜日程） */}
-      <nav className="sticky bottom-2 mx-auto mt-4 grid max-w-md grid-cols-2 gap-1 border-2 border-ink bg-ink p-1.5 shadow-pixel">
-        {nav.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === '/'}
-            className={({ isActive }) =>
-              cn(
-                'flex flex-col items-center gap-0.5 py-1.5 text-xs',
-                isActive ? 'bg-accent text-white shadow-pixel' : 'text-panelLight hover:bg-panel/10',
-              )
-            }
-          >
-            <item.icon className="h-4 w-4" />
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
+      {/* 底部两格导航（今日｜日程）：shell 的一行，非浮层 */}
+      <div className="shrink-0 bg-brandBg px-3 pb-3">
+        <nav className="mx-auto grid w-full max-w-md grid-cols-2 gap-1 border-2 border-ink bg-ink p-1.5 shadow-pixel md:max-w-2xl">
+          {nav.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/'}
+              className={({ isActive }) =>
+                cn(
+                  'flex flex-col items-center gap-0.5 py-1.5 text-xs',
+                  isActive ? 'bg-accent text-white shadow-pixel' : 'text-panelLight hover:bg-panel/10',
+                )
+              }
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+      </div>
     </div>
   );
 }

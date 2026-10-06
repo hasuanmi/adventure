@@ -52,8 +52,8 @@ Invoke-Expression (Get-Content -Raw .\scripts\p2-smoke.ps1)
 
 ## 5. 已知未决 / 待确认（别重复决定）
 
-- **当前时间线**（`current-time-line.tsx`）按 `docs/schedule-two-day-design.md §5.4` 实现为
-  "从此刻到底部的竖线"；是否改为"横线 + 左侧圆点"待用户确认。
+- ~~**当前时间线**~~ **已定并已改**：现为**横线**（左端像素方块 + 右端 `HH:mm` 标签），见 `docs/schedule-two-day-design.md §5.4`；不要再按旧的"竖线"描述改回去。
+- ~~底部导航遮挡日程网格~~ **已结构性修复**：外壳改为 `flex h-[100dvh]` 列（`main` 自身滚动、导航独占一行），见 `docs/p2-closure-record.md §16`。
 - `POST/GET /api/files` 上传未实现（凭证目前是文本描述）。
 - ESLint/Prettier 未接入 CI；`main` 分支保护未开。
 - 库里遗留早期验收测试账号（`parent1`/`child1`/`rp*`/`dc*` 等）；用户自己的 `miluyao`(家长)、`ziling`(孩子) 在用，**不要删**。
