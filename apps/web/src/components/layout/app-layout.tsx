@@ -27,7 +27,7 @@ export function AppLayout({
   const user = useUser();
   const navigate = useNavigate();
   const now = new Date();
-  const dateLabel = `${now.getMonth() + 1}月${now.getDate()}日 周${WEEK[now.getDay()]}`;
+  const dateLabel = `${now.getMonth() + 1}月${now.getDate()}日 · 周${WEEK[now.getDay()]}`;
   // 左上角成长入口的数据（等级由 xp 派生；与成长页共用 queryKey 缓存）
   const growthQuery = useQuery({
     queryKey: ['growth', 'me'],
@@ -86,7 +86,19 @@ export function AppLayout({
               nickname={user?.username ?? '小冒险家'}
             />
           </Link>
-          <span className="min-w-0 flex-1 truncate text-[10px] text-panelLight/70">{dateLabel}</span>
+          {/* 中部：产品品牌（整个 Header 的视觉中心）+ 日期作副信息（无边框/无按钮/不占卡片） */}
+          <span className="flex min-w-0 flex-1 flex-col items-center justify-center leading-none">
+            <span
+              data-brand-title
+              className="whitespace-nowrap text-[19px] font-extrabold tracking-[0.28em] text-panelLight"
+              style={{ textShadow: '2px 2px 0 rgba(0,0,0,0.35)' }}
+            >
+              冒险之旅
+            </span>
+            <span data-brand-date className="mt-1 whitespace-nowrap text-[10px] font-bold tracking-wider text-panelLight/70">
+              {dateLabel}
+            </span>
+          </span>
           <div className="flex shrink-0 items-center gap-2 text-xs">
             {user ? (
               <>
