@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: huahua-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-huahua}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-huahua_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-huahua}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-huahua} -d ${POSTGRES_DB:-huahua}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: huahua-api
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-huahua}:${POSTGRES_PASSWORD:-huahua_dev}@postgres:5432/${POSTGRES_DB:-huahua}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30m}
+      REFRESH_TTL_DAYS: ${REFRESH_TTL_DAYS:-30}
+      API_PORT: "3000"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      ATTENDANCE_TIMEZONE: ${ATTENDANCE_TIMEZONE:-Asia/Shanghai}
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: huahua-web
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  uploads:

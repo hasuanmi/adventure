@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "话话成长",
+    "slug": "huahua-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["ios", "android"],
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "com.huahua.mobile"
+    }
+  }
+}

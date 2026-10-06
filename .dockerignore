@@ -1,0 +1,23 @@
+# Docker 构建上下文排除（monorepo 根）
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+
+# 环境与密钥
+.env
+.env.*
+!*.env.example
+
+# 运行时数据
+uploads/
+
+# 移动端与本地工具不进 Docker 构建
+apps/mobile
+.expo
+
+# VCS / 系统
+.git
+.idea
+.vscode
+*.log

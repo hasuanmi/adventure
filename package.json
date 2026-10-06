@@ -1,0 +1,22 @@
+{
+  "name": "huahua-time",
+  "version": "0.1.0-p0",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20 <25",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter='./apps/api' --filter='./apps/web' dev",
+    "dev:api": "pnpm --filter @huahua/api dev",
+    "dev:web": "pnpm --filter @huahua/web dev",
+    "dev:mobile": "pnpm --filter @huahua/mobile start",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @huahua/api prisma:generate",
+    "db:migrate": "pnpm --filter @huahua/api prisma:migrate",
+    "infra:up": "docker compose up -d postgres",
+    "infra:down": "docker compose down"
+  }
+}

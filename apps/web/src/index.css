@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Pixel 复古主题 token（docs/ui-reference.md §1） */
+:root {
+  --panel: #f2e5c9;
+  --panel-light: #f7edd9;
+  --ink: #4a3326;
+  --ink-soft: #7a5c38;
+  --shadow: 4px 4px 0 #3a2a1e;
+  --accent: #e38628;
+  --ok: #4a9e6b;
+  --brand-bg: #e8d5ae;
+  --warning: #f59e0b;
+  --danger: #dc2626;
+}
+
+body {
+  background: var(--brand-bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}

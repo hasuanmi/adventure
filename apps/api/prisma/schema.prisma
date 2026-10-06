@@ -1,0 +1,242 @@
+// P0 schema：identity（User + RefreshToken）。P1：Task/Completion/Approval/Growth。业务模块（Event/Attendance/WrongQuestion）P4+ 加入。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// seed is run via pnpm prisma:seed (node prisma/seed.js); 16 RewardProfile rows, idempotent upsert
+
+model User {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username     String  @unique @db.VarChar(64)
+  passwordHash String  @map("password_hash") @db.Text
+  role         String  @default("child") @db.VarChar(16) // child/parent/teacher（VARCHAR + 应用层白名单惯例）
+  familyId     String? @map("family_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  refreshTokens RefreshToken[]
+  tasks         Task[]           @relation("TaskChild")
+  completions   TaskCompletion[] @relation("CompletionChild")
+  growth        UserGrowth?
+  rewardGrants  RewardGrant[]    @relation("GrantUser")
+
+  @@map("users")
+}
+
+// docs/auth-design.md §3：Refresh 仅存哈希；familyId 为轮换族；usedAt 非空即已消费（重放检测）
+model RefreshToken {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId              String    @map("user_id") @db.Uuid
+  tokenHash           String    @unique @map("token_hash") @db.Text
+  familyId            String    @map("family_id") @db.Uuid
+  expiresAt           DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt              DateTime? @map("used_at") @db.Timestamptz(6)
+  replacedByTokenHash String?   @map("replaced_by_token_hash") @db.Text
+  revokedAt           DateTime? @map("revoked_at") @db.Timestamptz(6)
+  ip                  String?   @db.VarChar(64)
+  userAgent           String?   @db.VarChar(256)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], name: "idx_refresh_tokens_user_id")
+  @@index([familyId], name: "idx_refresh_tokens_family_id")
+  @@map("refresh_tokens")
+}
+
+// =====================================================================
+// P1：Task / Completion / Approval / Growth（v1.2 §7.2）
+// =====================================================================
+
+// ---- 学习：任务（状态矩阵 = v1.2 §8.2：pending/in_progress/completed/returned）----
+model Task {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId         String    @map("family_id") @db.Uuid
+  childId          String    @map("child_id") @db.Uuid
+  title            String    @db.VarChar(128)
+  description      String?   @db.Text
+  subject          String?   @db.VarChar(32)
+  priority         Int       @default(0) @db.SmallInt
+  startAt          DateTime? @map("start_at") @db.Timestamptz(6)
+  endAt            DateTime? @map("end_at") @db.Timestamptz(6)
+  dueDate          DateTime? @map("due_date") @db.Date
+  // 预计用时（分钟；仅展示，不参与日程定位）
+  estimatedMinutes Int?      @map("estimated_minutes") @db.SmallInt
+  // 8 预设色之一（huahuastudy 色板；日程/卡片用色）
+  color            String?   @db.VarChar(16)
+  // 重复：位掩码 bit0=周一 … bit6=周日；0/空 = 不重复（仅日程展示层展开）
+  repeatWeekdays   Int?      @map("repeat_weekdays") @db.SmallInt
+  // 需人工确认时：任务创建人指定审核人（v1.2 §18#2：仅该审核人可审批）
+  requiresApproval Boolean   @default(false) @map("requires_approval")
+  reviewerId       String?   @map("reviewer_id") @db.Uuid
+  // 奖励档（RewardProfile.code；NULL = CUSTOM 默认档，业务上不强制写 CUSTOM）
+  rewardProfile    String?   @map("reward_profile") @db.VarChar(32)
+  status           String    @default("pending") @db.VarChar(16)
+  createdBy        String    @map("created_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  child            User             @relation("TaskChild", fields: [childId], references: [id], onDelete: Cascade)
+  completions      TaskCompletion[]
+  rewardGrants     RewardGrant[]
+  rewardProfileRef RewardProfile?   @relation(fields: [rewardProfile], references: [code], onDelete: Restrict)
+
+  @@index([familyId], name: "idx_tasks_family_id")
+  @@index([childId], name: "idx_tasks_child_id")
+  @@index([status], name: "idx_tasks_status")
+  @@map("tasks")
+}
+
+// ---- 完成/提交（统一模型：一条流水线 + requiresApproval 可选闸门，v1.2 §8）----
+// 同任务至多一个 pending 完成记录：部分唯一索引 (task_id) WHERE status='pending'（手写 SQL）
+model TaskCompletion {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId            String    @map("task_id") @db.Uuid
+  childId           String    @map("child_id") @db.Uuid
+  note              String?   @db.Text
+  evidenceJson      Json?     @map("evidence_json") @db.JsonB
+  submittedAt       DateTime  @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  status            String    @default("pending") @db.VarChar(16) // pending/approved/rejected
+  reviewedBy        String?   @map("reviewed_by") @db.Uuid
+  reviewedAt        DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  reviewComment     String?   @map("review_comment") @db.Text
+  approvalRequestId String?   @map("approval_request_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  task        Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  child       User         @relation("CompletionChild", fields: [childId], references: [id], onDelete: Cascade)
+  rewardGrant RewardGrant?
+
+  @@index([taskId], name: "idx_task_completions_task_id")
+  @@index([childId], name: "idx_task_completions_child_id")
+  @@map("task_completions")
+}
+
+// ---- 通用审批（完全通用：business_type/business_id；v1.2 §7.2）----
+// 同业务对象至多一个 pending 申请：部分唯一索引 (business_type, business_id) WHERE status='pending'（手写 SQL）
+model ApprovalRequest {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId     String    @map("family_id") @db.Uuid
+  childId      String    @map("child_id") @db.Uuid
+  businessType String    @map("business_type") @db.VarChar(32)
+  businessId   String    @map("business_id") @db.Uuid
+  applicantId  String    @map("applicant_id") @db.Uuid
+  reviewerId   String    @map("reviewer_id") @db.Uuid
+  status       String    @default("pending") @db.VarChar(16) // pending/approved/rejected/cancelled
+  comment      String?   @db.Text
+  reviewedBy   String?   @map("reviewed_by") @db.Uuid
+  reviewedAt   DateTime? @map("reviewed_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  records ApprovalRecord[]
+
+  @@index([familyId], name: "idx_approval_requests_family_id")
+  @@index([childId], name: "idx_approval_requests_child_id")
+  @@index([reviewerId], name: "idx_approval_requests_reviewer_id")
+  @@index([status], name: "idx_approval_requests_status")
+  @@map("approval_requests")
+}
+
+// 审批审计记录（Quorum audit_logs 模式）
+model ApprovalRecord {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId String  @map("request_id") @db.Uuid
+  action    String  @db.VarChar(32) // created/approved/rejected/cancelled
+  actorId   String  @map("actor_id") @db.Uuid
+  comment   String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  request ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId], name: "idx_approval_records_request_id")
+  @@map("approval_records")
+}
+
+// ---- 成长：余额（1:1；等级派生不存储，v1.2 §18#3）----
+model UserGrowth {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String  @unique @map("user_id") @db.Uuid
+  xp           Decimal @default(0) @db.Decimal(12, 4)
+  intelligence Decimal @default(0) @db.Decimal(12, 4)
+  logic        Decimal @default(0) @db.Decimal(12, 4)
+  expression   Decimal @default(0) @db.Decimal(12, 4)
+  exploration  Decimal @default(0) @db.Decimal(12, 4)
+  connection   Decimal @default(0) @db.Decimal(12, 4)
+  vitality     Decimal @default(0) @db.Decimal(12, 4)
+  coins        Decimal @default(0) @db.Decimal(12, 4)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_growth")
+}
+
+// 发放流水（幂等：UNIQUE(completion_id)；v1.2 §8 完成定稿节点发放）
+model RewardGrant {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  taskId       String?  @map("task_id") @db.Uuid
+  completionId String?  @unique @map("completion_id") @db.Uuid
+  type         String   @default("base") @db.VarChar(16)
+  xp           Decimal  @default(0) @db.Decimal(12, 4)
+  intelligence Decimal  @default(0) @db.Decimal(12, 4)
+  logic        Decimal  @default(0) @db.Decimal(12, 4)
+  expression   Decimal  @default(0) @db.Decimal(12, 4)
+  exploration  Decimal  @default(0) @db.Decimal(12, 4)
+  connection   Decimal  @default(0) @db.Decimal(12, 4)
+  vitality     Decimal  @default(0) @db.Decimal(12, 4)
+  coins        Decimal  @default(0) @db.Decimal(12, 4)
+  grantedAt    DateTime @default(now()) @map("granted_at") @db.Timestamptz(6)
+  grantedBy    String   @map("granted_by") @db.Uuid
+
+  user       User            @relation("GrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  task       Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  completion TaskCompletion? @relation(fields: [completionId], references: [id], onDelete: SetNull)
+
+  @@index([userId], name: "idx_reward_grants_user_id")
+  @@index([taskId], name: "idx_reward_grants_task_id")
+  @@map("reward_grants")
+}
+
+// ---- 标准奖励档（系统配置，非用户 CRUD；seed 16 条：15 标准 + CUSTOM）----
+// 奖励数值唯一来源是本表；shared-types 只放稳定 code/type，不复制数值。
+// 删除策略 Restrict：不允许删除仍被 Task 引用的档位。NULL（Task.rewardProfile）业务上视为 CUSTOM。
+model RewardProfile {
+  code         String  @id @db.VarChar(32) // DAILY_CHINESE / ... / CUSTOM
+  label        String  @db.VarChar(64)
+  category     String  @db.VarChar(16) // daily / world / scenery / custom（仅分组展示）
+  xp           Decimal @default(0) @db.Decimal(12, 4)
+  intelligence Decimal @default(0) @db.Decimal(12, 4)
+  logic        Decimal @default(0) @db.Decimal(12, 4)
+  expression   Decimal @default(0) @db.Decimal(12, 4)
+  exploration  Decimal @default(0) @db.Decimal(12, 4)
+  connection   Decimal @default(0) @db.Decimal(12, 4)
+  vitality     Decimal @default(0) @db.Decimal(12, 4)
+  coins        Decimal @default(100) @db.Decimal(12, 4) // 金币：最低档 100（15 类不猜分档）
+  isActive     Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tasks Task[]
+
+  @@map("reward_profiles")
+}
