@@ -697,6 +697,43 @@ async function main() {
     check('拖动后表头仍与所在列对齐（表头跟着一起动）', Number(alignedAfterDrag) <= 2, true);
     await cdp.shot('40-schedule-hpan');
 
+    // 表头与表体在**任意滚动位置**都必须同步（用户报告"第一列表头和下方不同步"）
+    const syncAt = async (left) => {
+      await cdp.evaluate(`document.querySelector('[data-schedule-scroll]').scrollLeft = ${left}`);
+      await sleep(120);
+      return cdp.evaluate(`(() => {
+        const headers = [...document.querySelectorAll('[data-day-header]')].map((e) => e.getBoundingClientRect().left);
+        const cols = [...document.querySelectorAll('[data-day-col]')].map((e) => e.getBoundingClientRect().left);
+        const deltas = headers.map((h, i) => Math.abs(h - cols[i]));
+        return {
+          max: Math.round(Math.max(...deltas) * 10) / 10,
+          perCol: deltas.map((d) => Math.round(d * 10) / 10),
+          scrollLeft: Math.round(document.querySelector('[data-schedule-scroll]').scrollLeft),
+        };
+      })()`);
+    };
+    const maxScroll = await cdp.evaluate(
+      `(() => { const sc = document.querySelector('[data-schedule-scroll]'); return Math.round(sc.scrollWidth - sc.clientWidth); })()`,
+    );
+    for (const pos of [0, Math.round(maxScroll / 3), Math.round((maxScroll * 2) / 3), maxScroll]) {
+      const sync = await syncAt(pos);
+      console.log(`      表头同步 @scrollLeft=${sync.scrollLeft}: 各列偏差 [${sync.perCol}]`);
+      check(`表头与列在 scrollLeft=${sync.scrollLeft} 时同步（每列 |Δ| ≤ 2px）`, sync.max <= 2, true);
+    }
+    await cdp.evaluate(`document.querySelector('[data-schedule-scroll]').scrollLeft = 0`);
+    await sleep(150);
+
+    // 今天/明天的表头结构必须与其他日期一致（用户报告"结构不一致"）
+    const headerStruct = await cdp.evaluate(`(() => {
+      const rows = [...document.querySelectorAll('[data-day-header]')].map((e) => ({
+        lines: (e.innerText || '').split('\\n').map((s) => s.trim()).filter(Boolean),
+      }));
+      const dateLike = rows.filter((r) => /^\\d+月\\d+日$/.test(r.lines[0] ?? '')).length;
+      return { total: rows.length, dateLike, sample: rows.slice(0, 3) };
+    })()`);
+    console.log(`      表头结构：${JSON.stringify(headerStruct)}`);
+    check('所有日期表头结构一致（首行都是 M月D日）', headerStruct.dateLike, headerStruct.total);
+
     // 拖到最左继续拖 → 切到上一周（周日期整体前移）
     const weekBefore = await cdp.evaluate(
       `[...document.querySelectorAll('[data-day-header]')].map((e) => e.innerText.split('\\n')[0]).join(',')`,

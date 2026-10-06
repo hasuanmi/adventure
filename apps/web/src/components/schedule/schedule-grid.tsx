@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { TaskDto } from '@huahua/shared-types';
 import { assignLanes } from '@huahua/shared-types';
 import { cn } from '../../lib/utils';
@@ -8,7 +8,6 @@ import {
   SCHEDULE_START_MIN,
   SCHEDULE_TOTAL_PX,
   addDays,
-  dayTitle,
   formatHM,
   hourLabels,
   isSameDay,
@@ -85,9 +84,17 @@ export function ScheduleGrid({
 }: ScheduleGridProps) {
   const labels = hourLabels();
   const scroller = useRef<HTMLDivElement>(null);
+  const headerRow = useRef<HTMLDivElement>(null);
   const drag = useRef<{ startX: number; startLeft: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
-  const [scrollLeft, setScrollLeft] = useState(0);
+
+  /**
+   * 表头横向位移：**直接写 DOM，不走 React state**。
+   * 之前用 state 驱动 → 拖动时表头比表体晚一帧渲染，用户看到"第一列表头和下方不同步"。
+   */
+  const syncHeader = (left: number): void => {
+    if (headerRow.current) headerRow.current.style.transform = `translateX(${-left}px)`;
+  };
 
   // 选中日滚入视野
   useEffect(() => {
@@ -97,7 +104,7 @@ export function ScheduleGrid({
     if (index < 0) return;
     const next = Math.max(0, index * DAY_COL_PX);
     el.scrollLeft = next;
-    setScrollLeft(next);
+    syncHeader(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusDate?.toDateString(), days.length]);
 
@@ -139,7 +146,7 @@ export function ScheduleGrid({
       return;
     }
     el.scrollLeft = d.startLeft - dx;
-    setScrollLeft(el.scrollLeft);
+    syncHeader(el.scrollLeft);
     suppressClick.current = true;
   }
 
@@ -156,31 +163,38 @@ export function ScheduleGrid({
         <div className="shrink-0 border-r-2 border-ink bg-panel" style={{ width: GUTTER_PX, height: HEADER_H }} />
         <div className="min-w-0 flex-1 overflow-hidden">
           <div
+            ref={headerRow}
             data-day-header-row
-            className="flex"
-            style={{ width: headerWidth, transform: `translateX(${-scrollLeft}px)` }}
+            className="flex will-change-transform"
+            style={{ width: headerWidth }}
           >
             {days.map((d) => {
               const isToday = isSameDay(d.date, today);
               const isTomorrow = isSameDay(d.date, addDays(today, 1));
-              const title = isToday
-                ? '今天'
-                : isTomorrow
-                  ? '明天'
-                  : `${d.date.getMonth() + 1}月${d.date.getDate()}日`;
-              const subtitle = isToday || isTomorrow ? dayTitle(d.date) : `周${weekdayCn(d.date)}`;
+              // 表头结构对**所有日期完全一致**：第一行 = M月D日，第二行 = 周X（今天/明天加标记）
+              const title = `${d.date.getMonth() + 1}月${d.date.getDate()}日`;
+              const weekday = `周${weekdayCn(d.date)}`;
+              const subtitle = isToday ? `今天 · ${weekday}` : isTomorrow ? `明天 · ${weekday}` : weekday;
               const content = (
                 <>
                   <div
-                    className="text-xs font-extrabold tracking-widest text-ink"
+                    className={cn(
+                      'text-xs font-extrabold tracking-widest',
+                      isToday ? 'text-accent' : 'text-ink',
+                    )}
                     style={{ textShadow: '1px 1px 0 rgba(58,42,30,0.25)' }}
                   >
                     {title}
                   </div>
-                  <div className="mt-0.5 text-[11px] font-bold text-inkSoft">{subtitle}</div>
+                  <div className={cn('mt-0.5 text-[11px] font-bold', isToday ? 'text-accent' : 'text-inkSoft')}>
+                    {subtitle}
+                  </div>
                 </>
               );
-              const headerClass = 'shrink-0 border-r-2 border-ink/40 px-1 py-2 text-center';
+              const headerClass = cn(
+                'shrink-0 border-r-2 border-ink/40 px-1 py-2 text-center',
+                isToday && 'bg-accent/10',
+              );
               return onSelectDay ? (
                 <button
                   key={d.date.toISOString()}
@@ -212,7 +226,7 @@ export function ScheduleGrid({
       <div
         ref={scroller}
         data-schedule-scroll
-        onScroll={(e) => setScrollLeft((e.target as HTMLDivElement).scrollLeft)}
+        onScroll={(e) => syncHeader((e.target as HTMLDivElement).scrollLeft)}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
