@@ -7,10 +7,22 @@ import { useUser } from '../../hooks/use-user';
 import { authApi } from '../../lib/api/auth';
 import { growthApi } from '../../lib/api/growth';
 import { clearSession } from '../../store/auth';
+import { BitHudHeader, BitNav } from '../ui-preview/bit-hud';
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+/**
+ * variant：
+ *   'default' = 现状外壳（老页面/正式页面用，**行为与改动前完全一致**）
+ *   'bit'     = 8bitcn 风格外壳（顶部头像/等级/XP + 底部金色功能栏 + 中文像素字），仅原型对比页使用
+ */
+export function AppLayout({
+  children,
+  variant = 'default',
+}: {
+  children: React.ReactNode;
+  variant?: 'default' | 'bit';
+}) {
   const user = useUser();
   const navigate = useNavigate();
   const now = new Date();
@@ -42,7 +54,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-[100dvh] flex-col bg-brandBg text-ink">
-      {/* HUD 顶部（docs/ui-reference.md §2） */}
+      {/* HUD 顶部（docs/ui-reference.md §2）
+          bit 变体：数据仍由这里算（等级/经验/角色），只是把表现换成 bit-hud.tsx 里的实现。 */}
+      {variant === 'bit' && (
+        <BitHudHeader
+          level={xpProgress?.level ?? null}
+          xp={xp}
+          current={xpProgress?.current ?? 0}
+          needed={xpProgress?.needed ?? 100}
+          ratio={xpProgress?.ratio ?? 0}
+          dateLabel={dateLabel}
+          roleLabel={
+            user ? (user.role === 'child' ? '小冒险家' : user.role === 'parent' ? '家长' : user.role) : null
+          }
+          onLogout={onLogout}
+        />
+      )}
+      {variant === 'default' && (
       <header className="shrink-0 border-b-4 border-ink bg-ink text-panelLight">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
           {/* 左上角顶部信息栏（2026-10-06 按用户订正的第二版结构）：
@@ -140,6 +168,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+      )}
 
       {/* 内容区：**自身滚动**（flex-1 + overflow-y-auto），导航是 shell 的独立一行 →
           任何滚动位置都不会被导航压住（此前用 `sticky bottom-2` 浮层 + pb-28 兜底，
@@ -150,29 +179,35 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* 底部两格导航（今日｜日程）：shell 的一行，非浮层 */}
       <div className="shrink-0 bg-brandBg px-3 pb-3">
-        {/* 列数跟随 nav 长度（加第三格「学习」时不能写死 2 列，否则第三格会掉到第二行） */}
-        <nav
-          data-app-nav
-          style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}
-          className="mx-auto grid w-full max-w-md gap-1 border-2 border-ink bg-ink p-1.5 shadow-pixel md:max-w-2xl"
-        >
-          {nav.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                cn(
-                  'flex flex-col items-center gap-0.5 py-1.5 text-xs',
-                  isActive ? 'bg-accent text-white shadow-pixel' : 'text-panelLight hover:bg-panel/10',
-                )
-              }
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+        {/* bit 变体：金色双线功能栏（用户参考图风格 + 中文像素字）。
+            默认变体保持原样，老页面不受影响。 */}
+        {variant === 'bit' ? (
+          <BitNav items={nav.map((item) => ({ to: item.to, label: item.label }))} />
+        ) : (
+          <nav
+            data-app-nav
+            // 列数跟随 nav 长度（加第三格「学习」时不能写死 2 列，否则第三格会掉到第二行）
+            style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}
+            className="mx-auto grid w-full max-w-md gap-1 border-2 border-ink bg-ink p-1.5 shadow-pixel md:max-w-2xl"
+          >
+            {nav.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) =>
+                  cn(
+                    'flex flex-col items-center gap-0.5 py-1.5 text-xs',
+                    isActive ? 'bg-accent text-white shadow-pixel' : 'text-panelLight hover:bg-panel/10',
+                  )
+                }
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+        )}
       </div>
     </div>
   );

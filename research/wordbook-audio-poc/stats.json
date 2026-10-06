@@ -1,0 +1,21 @@
+{
+  "file_exists": {
+    "us_found": 28,
+    "uk_found": 17,
+    "both": 15,
+    "only_us": 13,
+    "only_uk": 2,
+    "neither": 0
+  },
+  "usable": {
+    "us": 27,
+    "uk": 17
+  },
+  "by_status": {
+    "allowed": 44,
+    "no_file": 15,
+    "needs_review": 1
+  },
+  "requests": 59,
+  "rate_limited_429": 9
+}

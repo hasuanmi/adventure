@@ -1,0 +1,25 @@
+{
+  "instructions": [
+    "逐条打开 source_page_url，确认：① 原作者是谁 ② 许可是否允许商用 + 再分发 ③ 是否改动过音频",
+    "verdict=accept 时必须填 reviewer / reviewed_at / note（工具会写入 attribution.csv 的 verified_by/verified_at）",
+    "verdict=reject 表示弃用该条（不进白名单，继续走 speechSynthesis 兜底）",
+    "本文件是人工决策记录，与自动筛选规则分离，便于审计与回滚"
+  ],
+  "items": [
+    {
+      "word": "science",
+      "accent": "us",
+      "commons_file": "File:En-us-science.ogg",
+      "license": "CC BY-SA 3.0",
+      "artist": "Dvortygirl",
+      "uploader": "Dvortygirl",
+      "credit": "Own work",
+      "reason": "GFDL（copyleft，音频再分发义务复杂）与 cc-by-sa-3.0 并存，需人工拍板",
+      "source_page_url": "https://commons.wikimedia.org/wiki/File:En-us-science.ogg",
+      "verdict": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "note": ""
+    }
+  ]
+}

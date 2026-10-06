@@ -24,7 +24,20 @@
 | Quorum `request_service.go` | evaluateWithCounts（单阶段化）、自审禁止、CanViewerAct、幂等键/指纹 | `apps/api/src/approval/approval.evaluate.ts` + `approval.service.ts`（部分唯一索引为 DB 层幂等） | ✅ 已落地 |
 | —（无开源） | task/growth 状态机与成长数值（v1.2 产品规则） | `apps/api/src/task|growth` + shared-types | ✅ 自研 |
 
-## 三、声明方式（复用落地时强制）
+## 三、UI 原型阶段（2026-10-06）：8bitcn 技法移植 + 中文像素字体
+
+> 背景：UI 技术选型结论为**方案 C**（只采用 8bitcn 技法，不全量引入）。相关评估见本轮记录。
+> 原则不变：**只借"技法"，不复制它的组件源码**；唯一直接入库的第三方二进制是字体。
+
+| 来源 | 许可证 | 版权声明（源 LICENSE 文件） | 本项目落点 | 状态 |
+|---|---|---|---|---|
+| **8bitcn（TheOrcDev/8bitcn-ui）** | MIT | Copyright (c) 2025 8bitcn | **未复制其源码**。仅按其公开技法在 `apps/web/src/components/ui-preview/` 自行重写为 Tailwind **v3** 版本（缺角框 / 12 块描边 / N 格分段进度）。各文件头已注明技法来源 | ✅ 已落地（技法，非代码） |
+| **Fusion Pixel 缝合像素字体**（TakWolf/fusion-pixel-font，经 npm `@fontsource/fusion-pixel-12px-proportional-sc@5.3.0` 分发） | **SIL OFL-1.1**（**保留字体名 'Fusion Pixel'，不得改名**） | `Copyright (c) 2022, TakWolf (https://takwolf.com), with Reserved Font Name 'Fusion Pixel'.` | 字体文件 `apps/web/public/fonts/fusion-pixel-12px-proportional-sc.woff2`；完整许可证原文随字体存放于同目录 `LICENSE-fusion-pixel.txt`；`@font-face` 见 `apps/web/src/styles/pixel-font.css` | ✅ 已落地 |
+
+> 注意（字体）：OFL-1.1 允许商用与嵌入，但 **① 不得改名出售；② 分发时必须随附许可证原文**（已随字体存放）；
+> ③ 本项目**未使用** Zpix 最像素字体 —— 它**非开源**（商业单产品 USD $1000，禁止修改/再分发），不要引入。
+
+## 四、声明方式（复用落地时强制）
 
 1. 被复用的每个源文件/算法，在其适配后的本项目文件头部加注释块：
    ```

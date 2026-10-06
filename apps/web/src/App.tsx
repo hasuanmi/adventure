@@ -24,6 +24,9 @@ import { SubmitCompletePage } from './pages/SubmitCompletePage';
 import { TaskDetailPage } from './pages/TaskDetailPage';
 import { TaskFormPage } from './pages/TaskFormPage';
 import { TodayPage } from './pages/TodayPage';
+import { TodayBitPage } from './pages/TodayBitPage';
+import { TodayComparePage } from './pages/TodayComparePage';
+import { UiPreviewPage } from './pages/UiPreviewPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -48,10 +51,10 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function withLayout(children: React.ReactNode) {
+function withLayout(children: React.ReactNode, variant: 'default' | 'bit' = 'default') {
   return (
     <RequireAuth>
-      <AppLayout>{children}</AppLayout>
+      <AppLayout variant={variant}>{children}</AppLayout>
     </RequireAuth>
   );
 }
@@ -62,7 +65,24 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* Pixel UI 原型预览（8bitcn 技法验证）：**故意不套 RequireAuth / AppLayout** ——
+            它是纯静态设计验证页，无 API / 无会话 / 无业务逻辑，便于直接打开比对。
+            ⚠️ 上线前必须删除此路由，或加环境变量门禁。 */}
+        <Route path="/ui-preview" element={<UiPreviewPage />} />
         <Route path="/" element={withLayout(<TodayPage />)} />
+        {/* 首页改版对比（**评审用，TodayPage 一行未改**）：
+            /today-bit      = 新版首页（bit 外壳 + 缺角框 / 分段进度 / 缺角按钮 / 像素字）
+            /today-compare  = 一键切换 旧版 ↔ 新版（连顶部 HUD 和底部功能栏一起切）
+            ⚠️ 上线前必须删除这两条路由。 */}
+        <Route path="/today-bit" element={withLayout(<TodayBitPage />, 'bit')} />
+        <Route
+          path="/today-compare"
+          element={
+            <RequireAuth>
+              <TodayComparePage />
+            </RequireAuth>
+          }
+        />
         {/* /tasks 列表入口重定向到今日（任务并入今日；子路由保留兼容） */}
         <Route path="/tasks" element={<Navigate to="/" replace />} />
         <Route path="/schedule" element={withLayout(<SchedulePage />)} />
