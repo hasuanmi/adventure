@@ -1186,13 +1186,17 @@ async function main() {
     );
     check('图标选择器可选中（aria-pressed 生效）', picked, 'true');
     await cdp.clickByText('button', '创建任务');
-    await sleep(2500);
-    const newCard = await cdp.evaluate(`(() => {
+    // 轮询等待新任务卡片出现（最多 12s），替代固定 sleep：列表未刷新完就断言会偶发失败
+    let newCard = null;
+    for (let attempt = 0; attempt < 24 && !newCard; attempt += 1) {
+      await sleep(500);
+      newCard = await cdp.evaluate(`(() => {
       const t = [...document.querySelectorAll('[data-task-card-toggle]')].find((e) => e.textContent.includes(${JSON.stringify(customTitle)}));
       if (!t) return null;
       const img = t.querySelector('img');
       return { src: img ? img.getAttribute('src') : null, w: img ? Math.round(img.getBoundingClientRect().width) : 0 };
     })()`);
+    }
     check('新建任务卡片显示自选图标', String(newCard?.src ?? '').includes('/icons/sheep.png'), true);
     check('自选图标渲染尺寸贴合当前视觉（20–48px）', Number(newCard?.w ?? 0) >= 20 && Number(newCard?.w ?? 0) <= 48, true);
 
