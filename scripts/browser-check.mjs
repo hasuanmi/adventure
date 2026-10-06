@@ -1024,195 +1024,54 @@ async function main() {
     const afterDuplicate = await cdp.cardText(taskTitle);
     check('重复提交给出友好提示（未崩溃）', String(afterDuplicate).includes('已提交过') || String(afterDuplicate).includes('等待家长确认'), true);
 
-    // ---------- 8. 表头成长入口（小女孩头像 + 等级经验栏）→ 成长页 ----------
-    await cdp.send('Page.navigate', { url: `${BASE}/` });
-    await cdp.waitFor('[data-growth-entry]');
-    const headerText = await cdp.evaluate(
-      `document.querySelector('[data-growth-entry]').innerText.replace(/\\n/g, ' ')`,
-    );
-    check('表头含等级数字徽章', /^\d+/.test(String(headerText).trim()), true);
-    check('表头含 XP 进度', String(headerText).includes('XP'), true);
-    // 等级 UI 形态（参考旧项目）：徽章 + **条内文字** cur / need XP + 圆角
-    const levelUi = await cdp.evaluate(`(() => {
-      const badge = document.querySelector('[data-growth-entry] [data-level-badge]');
-      const bar = document.querySelector('[data-growth-entry] [data-xp-bar]');
-      const label = document.querySelector('[data-growth-entry] [data-xp-label]');
-      if (!badge || !bar || !label) return null;
-      const b = bar.getBoundingClientRect();
-      const l = label.getBoundingClientRect();
-      const s = getComputedStyle(bar);
+    // ---------- 顶部 Player HUD（2026-10-06 重设计：圆形头像 + LV 压左上 + 昵称右上 + XP 条无数字） ----------
+    const hud = await cdp.evaluate(`(() => {
+      const h = document.querySelector('[data-player-hud]');
+      if (!h) return null;
+      const frame = h.querySelector('[data-hud-avatar-frame]');
+      const avatar = h.querySelector('[data-hud-avatar]');
+      const badge = h.querySelector('[data-hud-level-badge]');
+      const nick = h.querySelector('[data-hud-nickname]');
+      const bar = h.querySelector('[data-hud-xp-bar]');
+      const fill = h.querySelector('[data-hud-xp-fill]');
+      const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
       return {
-        badgeText: (badge.textContent || '').trim(),
-        labelText: (label.textContent || '').trim(),
-        inside: l.left >= b.left - 1 && l.right <= b.right + 1 && l.top >= b.top - 1 && l.bottom <= b.bottom + 1,
-        radius: parseFloat(s.borderTopLeftRadius) || 0,
-        imgSrc: (document.querySelector('[data-growth-entry] img') || {}).getAttribute?.('src') ?? null,
+        avatar: r(avatar), frame: r(frame), badge: r(badge), nick: r(nick), bar: r(bar), fill: r(fill),
+        badgeText: badge ? badge.textContent.trim() : '',
+        nickText: nick ? nick.textContent.trim() : '',
+        headerText: (document.querySelector('header') || document.body).innerText,
       };
     })()`);
-    console.log(`      等级 UI：${JSON.stringify(levelUi)}`);
-    check('等级徽章显示数字', /^\d+$/.test(levelUi?.badgeText ?? ''), true);
-    check('经验值文字在条内（cur / need XP）', /^\d+ \/ \d+ XP$/.test(levelUi?.labelText ?? '') && levelUi?.inside === true, true);
-    check('经验条为直角像素条（参考图为方角）', Number(levelUi?.radius ?? 0) <= 2, true);
-    check('表头头像换成 toon 角色图', String(levelUi?.imgSrc ?? '').includes('avatar-girl-toon'), true);
-    // 顶部信息栏结构（用户订正第二版）：**高头像 + 低状态条**
-    //   头像框保持现有尺寸；【等级+XP】整体约一半高度、**底部与头像框底部对齐**（非垂直居中）；
-    //   等级框与 XP 条**直接相连**（无间距）；外面不得有任何大框
-    const levelLook = await cdp.evaluate(`(() => {
-      const entry = document.querySelector('[data-growth-entry]');
-      if (!entry) return null;
-      const avatarFrame = entry.querySelector('[data-avatar-frame]');
-      const img = entry.querySelector('[data-avatar-img]');
-      const group = entry.querySelector('[data-status-group]');
-      const badge = entry.querySelector('[data-level-badge]');
-      const bar = entry.querySelector('[data-xp-bar]');
-      const fill = entry.querySelector('[data-xp-fill]');
-      const label = entry.querySelector('[data-xp-label]');
-      if (!avatarFrame || !img || !group || !badge || !bar || !fill || !label) return null;
-      const r = (el) => el.getBoundingClientRect();
-      const cs = (el) => getComputedStyle(el);
-      const nums = (s) => (s.match(/\\d+(\\.\\d+)?/g) || []).map(Number);
-      const [fr, fg, fb] = nums(cs(fill).backgroundColor);
-      const af = r(avatarFrame);
-      const gr = r(group);
-      const bd = r(badge);
-      const br = r(bar);
-      const lr = r(label);
-      const inner = {
-        top: br.top + (parseFloat(cs(bar).borderTopWidth) || 0),
-        bottom: br.bottom - (parseFloat(cs(bar).borderBottomWidth) || 0),
-      };
-      return {
-        avatarBorder: parseFloat(cs(avatarFrame).borderTopWidth) || 0,
-        badgeBorder: parseFloat(cs(badge).borderTopWidth) || 0,
-        barBorder: parseFloat(cs(bar).borderTopWidth) || 0,
-        // 无大外框：group 自身无边框无底色；其父（行容器）也无边框无底色
-        groupBorder: parseFloat(cs(group).borderTopWidth) || 0,
-        groupBg: cs(group).backgroundColor,
-        rowBorder: parseFloat(cs(group.parentElement).borderTopWidth) || 0,
-        rowBg: cs(group.parentElement).backgroundColor,
-        // 尺寸与对齐
-        avatarH: Math.round(af.height),
-        groupH: Math.round(gr.height),
-        ratio: Number((gr.height / af.height).toFixed(2)),
-        bottomDelta: Math.round(af.bottom - gr.bottom),
-        centerDelta: Math.round(Math.abs((af.top + af.bottom) / 2 - (gr.top + gr.bottom) / 2)),
-        avatarImgW: Math.round(r(img).width),
-        // 等级框与 XP 条直接相连（无间距）；紧靠头像
-        seam: Math.round(br.left - bd.right),
-        gapToAvatar: Math.round(gr.left - af.right),
-        // XP 条内部：单平面 + 文字无底色且居中
-        fillCoversInner: Math.abs(r(fill).top - inner.top) <= 1 && Math.abs(r(fill).bottom - inner.bottom) <= 1,
-        barChildren: bar.children.length,
-        labelBg: cs(label).backgroundColor,
-        labelPos: cs(label).position,
-        labelCentered:
-          Math.abs((lr.left + lr.right) / 2 - (br.left + br.right) / 2) <= 2 &&
-          Math.abs((lr.top + lr.bottom) / 2 - (br.top + br.bottom) / 2) <= 2,
-        barBg: cs(bar).backgroundColor,
-        fillBg: cs(fill).backgroundColor,
-        blueish: fb > fr && fb > fg,
-        imgFit: cs(img).objectFit,
-      };
-    })()`);
-    console.log(`      顶部信息栏：${JSON.stringify(levelLook)}`);
-    check('头像框保持现有尺寸（约 36px）', Number(levelLook?.avatarH ?? 0) >= 32, true);
-    check('【等级+XP】整体约为头像高度的一半（0.4–0.7）', Number(levelLook?.ratio ?? 0) >= 0.4 && Number(levelLook?.ratio ?? 9) <= 0.7, true);
-    check('等级+XP 底部与头像框底部对齐（|Δ| ≤ 1px）', Math.abs(Number(levelLook?.bottomDelta ?? 99)) <= 1, true);
-    check('等级+XP 不是与头像垂直居中', Number(levelLook?.centerDelta ?? 0) > 4, true);
-    // seam = 条左 - 等级框右：0 = 紧贴，-2 = 边框重叠一条缝（本设计的"直接相连"）
-    check('等级框与 XP 条直接相连（无缝，边框重叠 ≤2px）', Number(levelLook?.seam ?? 99) >= -2 && Number(levelLook?.seam ?? 99) <= 0, true);
-    check('等级+XP 紧靠头像（间距 ≤ 10px）', Number(levelLook?.gapToAvatar ?? 99) <= 10, true);
-    check('三处边框均为 2px（头像框/等级框/XP 条）', levelLook?.avatarBorder === 2 && levelLook?.badgeBorder === 2 && levelLook?.barBorder === 2, true);
-    check('未给等级+XP 加外框（group 与行容器均无边框）', Number(levelLook?.groupBorder ?? 9) === 0 && Number(levelLook?.rowBorder ?? 9) === 0, true);
-    check('未给等级+XP 加底色（无包住它的大矩形）', levelLook?.groupBg === 'rgba(0, 0, 0, 0)' && levelLook?.rowBg === 'rgba(0, 0, 0, 0)', true);
-    check('XP 文字无独立底色块、绝对定位、整条居中', levelLook?.labelBg === 'rgba(0, 0, 0, 0)' && levelLook?.labelPos === 'absolute' && levelLook?.labelCentered === true, true);
-    check('XP 条只有一个水平面（填充铺满内部、无第二层）', levelLook?.fillCoversInner === true && levelLook?.barChildren === 2, true);
-    check('经验条未填充为浅米色', levelLook?.barBg === 'rgb(242, 229, 201)', true);
-    check('经验条填充为深藏蓝（参考采样色）', levelLook?.fillBg === 'rgb(68, 78, 105)' && levelLook?.blueish === true, true);
-    check('头像图片 object-contain（不裁切）', levelLook?.imgFit === 'contain', true);
-    const avatarWidth = await cdp.evaluate(
-      `(() => { const i = document.querySelector('[data-avatar-img]'); return i ? i.naturalWidth : 0; })()`,
-    );
-    check('表头头像可加载（/avatar-girl.png 存在且可访问）', Number(avatarWidth) > 0, true);
-    const navLabels = await cdp.evaluate(
-      `[...document.querySelectorAll('nav a')].map((a) => (a.textContent || '').trim())`,
-    );
-    check('底部导航为 今日|日程|学习 三格', navLabels.join(',') === '今日,日程,学习', true);
-    check('成长不进底部导航（仍走表头入口）', navLabels.some((l) => l.includes('成长')), false);
-    // 三格必须在同一行（曾因写死 grid-cols-2 导致第三格换行）
-    check(
-      '三格导航在同一行（无换行）',
-      await cdp.evaluate(
-        `(() => { const tops = [...document.querySelectorAll('[data-app-nav] a')].map((a) => Math.round(a.getBoundingClientRect().top)); return new Set(tops).size; })()`,
-      ),
-      1,
-    );
-    await cdp.shot('10-header-growth-entry');
+    check('顶部为 Player HUD（data-player-hud）', Boolean(hud && hud.avatar), true);
+    check('HUD 含圆形头像（≥36px 且宽高近似相等）', Boolean(hud && hud.avatar) && Math.abs(Number(hud.avatar.w) - Number(hud.avatar.h)) <= 2 && Number(hud.avatar.w) >= 36, true);
+    check('HUD 含等级徽章且文案为 LV.n', /^LV\.\d+$/.test(String(hud && hud.badgeText ? hud.badgeText : '')), true);
+    check('等级徽章压在头像框左上', Boolean(hud && hud.badge && hud.frame) && Number(hud.badge.l) < Number(hud.frame.l) && Number(hud.badge.t) <= Number(hud.frame.t) + 8, true);
+    check('HUD 含昵称且非空', Boolean(hud && String(hud.nickText || '').length > 0), true);
+    check('昵称位于头像右侧（不与头像重叠）', Boolean(hud && hud.nick && hud.frame) && Number(hud.nick.l) >= Number(hud.frame.r) - 2, true);
+    check('昵称不与经验条重叠', !hud || !hud.nick || !hud.bar || Number(hud.nick.b) <= Number(hud.bar.t) + 2, true);
+    check('HUD 含 XP 进度条与填充', Boolean(hud && hud.bar && hud.fill), true);
+    check('经验条紧贴头像右缘（≤6px）', !hud || !hud.bar || !hud.frame || Math.abs(Number(hud.bar.l) - Number(hud.frame.r)) <= 6, true);
+    check('经验条底边与头像底边对齐（|Δ| ≤ 3px）', !hud || !hud.bar || !hud.frame || Math.abs(Number(hud.bar.b) - Number(hud.frame.b)) <= 3, true);
+    check('首页头部不显示 XP 数字/文案', /XP|\d+\s*\/\s*\d+/.test(String((hud && hud.headerText) || '')), false);
 
-    await cdp.clickSelector('[data-growth-entry]');
-    await sleep(1200);
-    check('点击表头进入成长页', await cdp.evaluate('location.pathname'), '/growth');
-    const growthText = String(await cdp.evaluate('document.body.innerText'));
-    check(
-      '成长页含六维全部标签',
-      ['智识', '逻辑', '表达', '探索', '羁绊', '体魄'].every((l) => growthText.includes(l)),
-      true,
-    );
-    check('成长页含金币', growthText.includes('金币'), true);
-    check('成长页含奖励记录区', growthText.includes('奖励记录'), true);
-    check('成长页含本周打卡', growthText.includes('本周打卡'), true);
-    check(
-      '成长页 XP 文字同样无底色块且居中',
-      await cdp.evaluate(`(() => {
-        const label = document.querySelector('[data-xp-label]');
-        const bar = document.querySelector('[data-xp-bar]');
-        if (!label || !bar) return false;
-        const l = label.getBoundingClientRect();
-        const b = bar.getBoundingClientRect();
-        return (
-          getComputedStyle(label).backgroundColor === 'rgba(0, 0, 0, 0)' &&
-          /^\\d+ \\/ \\d+ XP$/.test((label.textContent || '').trim()) &&
-          Math.abs((l.left + l.right) / 2 - (b.left + b.right) / 2) <= 2
-        );
-      })()`),
-      true,
-    );
-    // ---------- 8b. 窄屏（360px）下三个组件不被挤压/不溢出 ----------
-    await cdp.send('Emulation.setDeviceMetricsOverride', {
-      width: 360,
-      height: 740,
-      deviceScaleFactor: 2,
-      mobile: true,
-    });
-    await sleep(700);
-    const narrow = await cdp.evaluate(`(() => {
-      const entry = document.querySelector('[data-growth-entry]');
-      const avatarFrame = entry.querySelector('[data-avatar-frame]');
-      const img = entry.querySelector('[data-avatar-img]');
-      const group = entry.querySelector('[data-status-group]');
-      const bar = entry.querySelector('[data-xp-bar]');
-      const label = entry.querySelector('[data-xp-label]');
-      const r = (el) => el.getBoundingClientRect();
-      const b = r(bar);
-      const l = r(label);
-      return {
-        overflow: document.documentElement.scrollWidth - window.innerWidth,
-        avatarW: Math.round(r(img).width),
-        barW: Math.round(b.width),
-        labelFits: l.width <= b.width + 1,
-        bottomAligned: Math.abs(r(avatarFrame).bottom - r(group).bottom) <= 1,
-      };
+    // ---------- 三段式 Header：中部产品品牌 + 日期副信息 ----------
+    const brand = await cdp.evaluate(`(() => {
+      const t = document.querySelector('[data-brand-title]');
+      if (!t) return null;
+      const d = document.querySelector('[data-brand-date]');
+      const h = document.querySelector('header') || document.body;
+      const rb = t.getBoundingClientRect(); const hb = h.getBoundingClientRect();
+      const rd = d ? d.getBoundingClientRect() : null;
+      const hudEl = document.querySelector('[data-player-hud]');
+      const rh = hudEl ? hudEl.getBoundingClientRect() : null;
+      return { text: t.textContent.trim(), cx: rb.left + rb.width / 2, headerCx: hb.left + hb.width / 2,
+        dateText: d ? d.textContent.trim() : '', dateBelow: rd ? rd.top >= rb.bottom - 2 : false,
+        rightOfHud: rh ? rb.left >= rh.right - 2 : false };
     })()`);
-    console.log(`      窄屏 360px：${JSON.stringify(narrow)}`);
-    check('窄屏无横向溢出', Number(narrow.overflow) <= 1, true);
-    check('窄屏头像未被挤小（≥ 24px）', Number(narrow.avatarW) >= 24, true);
-    check('窄屏 XP 条仍有可用宽度（≥ 80px）', Number(narrow.barW) >= 80, true);
-    check('窄屏 XP 文字仍在条内', narrow.labelFits === true, true);
-    check('窄屏仍保持底部对齐', narrow.bottomAligned === true, true);
-    await cdp.shot('20-header-narrow-360');
-    await cdp.send('Emulation.clearDeviceMetricsOverride');
-    await sleep(500);
-    await cdp.shot('11-growth-page');
+    check('中部产品名为「冒险之旅」', String((brand && brand.text) || ''), '冒险之旅');
+    check('产品名位于 Header 中央（|Δ| ≤ 24px）', Boolean(brand) && Math.abs(Number(brand.cx) - Number(brand.headerCx)) <= 24, true);
+    check('日期在品牌下方且含「月…日」', Boolean(brand) && /月.+日/.test(String(brand.dateText)) && Boolean(brand.dateBelow), true);
+    check('品牌位于左侧角色区右侧', Boolean(brand) && Boolean(brand.rightOfHud), true);
 
     // ---------- 9. 任务类型图标（quest_icons 接入：卡片 tile + HUD「冒险」） ----------
     await cdp.send('Page.navigate', { url: `${BASE}/` });
