@@ -1256,8 +1256,8 @@ async function main() {
     check('进度标记不固定在最右端', Number(adv1.pct) >= 100 || Number(adv1.markerFromRight) > 10, true);
     check('宽度与标记都有过渡（平滑增长而非瞬变）', adv1.fillTransition !== '0s' && adv1.markerTransition !== '0s', true);
     check('首次加载不播放完成动画', adv1.pulseNow === false, true);
-    // 此时进度仅 25% → 按用户规则**不应**出现打卡入口（100% 才出现，见 13f）
-    check('任务未 100% 时不显示打卡入口', await cdp.evaluate(`Boolean(document.querySelector('[data-attendance-card]'))`), false);
+    // 此时进度仅 25% → 按用户规则**不应**出现成长卡入口（100% 才出现，见 13f）
+    check('任务未 100% 时不显示成长卡入口', await cdp.evaluate(`Boolean(document.querySelector('[data-growth-card-entry]'))`), false);
     await cdp.shot('21-adventure-progress');
 
     // 行内点「完成」→ 真实进度变化 → 应出现动画（标记弹跳 + 粒子）
@@ -1328,74 +1328,93 @@ async function main() {
     check('100% 时文案变为「今日冒险完成！」', advDone.doneText, '今日冒险完成！');
     await cdp.shot('23-adventure-complete');
 
-    // ---------- 13f. 打卡（P4）：100% 后才出现的入口 + 防重 + 签退 + 月度历史 ----------
-    // ① 100% 后打卡入口已出现（未 100% 的情况已在 13e 断言过）
-    const gateAfter = await cdp.evaluate(`Boolean(document.querySelector('[data-attendance-card]'))`);
-    check('今日任务 100% 后出现打卡入口', gateAfter, true);
-    // 用 API 复现"未满 100% 无入口"：把一条已完成任务临时改回？—— 不可逆，改为断言接口层规则：
-    const todayState0 = await api('GET', '/attendance/today', childToken);
-    check(
-      '打卡今日状态接口可用（三态之一）',
-      ['NOT_CHECKED_IN', 'CHECKED_IN', 'CHECKED_OUT'].includes(todayState0.json?.state),
-      true,
+    // ---------- 13f. 今日成长卡（P4 订正：不是考勤） ----------
+    const gateAfter = await cdp.evaluate(`Boolean(document.querySelector('[data-growth-card-entry]'))`);
+    check('今日任务 100% 后出现成长卡入口', gateAfter, true);
+    // 硬要求：页面不得出现成人考勤措辞
+    const pageText = String(await cdp.evaluate('document.body.innerText'));
+    for (const word of ['签退', '已打卡', '打卡时间', '考勤', '打卡成功']) {
+      check(`页面不出现考勤措辞「${word}」`, pageText.includes(word), false);
+    }
+    const entryText = await cdp.evaluate(
+      `(document.querySelector('[data-growth-card-entry]')?.innerText ?? '').replace(/\\n/g, ' ')`,
     );
-    // ② 打卡 + 防重（第二次必须 409，reason 明确）
-    const first = await api('POST', '/attendance/check-in', childToken, {});
-    check('打卡成功返回 201', first.status, 201);
-    const dup = await api('POST', '/attendance/check-in', childToken, {});
-    check('同一天重复打卡 → 409', dup.status, 409);
-    check('重复打卡 reason 明确', dup.json?.reason, 'attendance_already_checked_in');
-    // ③ UI：状态变为已打卡，按钮变成签退
-    await cdp.send('Page.navigate', { url: `${BASE}/` });
-    await cdp.waitFor('[data-attendance-card]');
+    console.log(`      成长卡入口：${entryText}`);
+    check('入口文案为「每日打卡 / 完成今日冒险，领取今日成长卡」', /每日打卡/.test(entryText) && /领取今日成长卡/.test(entryText), true);
+    await cdp.shot('24-growth-card-entry');
+
+    // 点击入口 → Pixel RPG 卡片弹窗（结构固定：图 → 标题带 → 一句话 → 领取条）
+    await cdp.clickSelector('[data-growth-card-entry]');
     await sleep(700);
-    const cardState = await cdp.evaluate(`(() => {
-      const card = document.querySelector('[data-attendance-card]');
-      const stateEl = document.querySelector('[data-attendance-state]');
-      const dataAttr = document.querySelector('[data-attendance-card]');
+    const modal = await cdp.evaluate(`(() => {
+      const box = document.querySelector('[data-growth-card-modal]');
+      if (!box) return null;
+      const img = document.querySelector('[data-growth-card-image]');
+      const copy = document.querySelector('[data-growth-card-copy]');
+      const claim = document.querySelector('[data-growth-card-claim]');
+      const text = (box.innerText || '').replace(/\\n/g, ' | ');
       return {
-        hasCard: Boolean(card),
-        state: stateEl ? stateEl.getAttribute('data-attendance-state') : (dataAttr ? dataAttr.getAttribute('data-attendance-state') : null),
-        hasCheckOut: Boolean(document.querySelector('[data-attendance-check-out]')),
-        hasCheckIn: Boolean(document.querySelector('[data-attendance-check-in]')),
-        text: (card?.innerText ?? '').replace(/\\n/g, ' | ').slice(0, 120),
+        text,
+        hasImage: Boolean(img),
+        imgSrc: img ? img.getAttribute('src') : null,
+        imgLoaded: img ? img.naturalWidth > 0 : false,
+        copy: copy ? (copy.textContent || '').trim() : '',
+        hasClaim: Boolean(claim),
+        claimText: claim ? (claim.textContent || '').trim() : '',
       };
     })()`);
-    console.log(`      打卡卡：${JSON.stringify(cardState)}`);
-    check('已打卡状态下出现签退按钮（不再是打卡按钮）', cardState.hasCheckOut === true && cardState.hasCheckIn === false, true);
-    check('打卡卡显示已打卡', String(cardState.text).includes('已打卡'), true);
-    await cdp.shot('24-attendance-card');
-    // ④ UI 签退 → 时长派生
-    await cdp.clickSelector('[data-attendance-check-out]');
-    await sleep(1500);
-    const afterOut = await cdp.evaluate(`(() => ({
-      hasMinutes: Boolean(document.querySelector('[data-attendance-minutes]')),
-      minutes: document.querySelector('[data-attendance-minutes]')?.textContent ?? null,
-      text: (document.querySelector('[data-attendance-card]')?.innerText ?? '').replace(/\\n/g, ' | ').slice(0, 140),
+    console.log(`      成长卡弹窗：${JSON.stringify(modal)}`);
+    check('点击入口弹出成长卡弹窗', modal !== null, true);
+    check('弹窗标题为「今日成长卡」', String(modal?.text ?? '').includes('今日成长卡'), true);
+    check('弹窗含像素图片且已加载', modal?.hasImage === true && modal?.imgLoaded === true, true);
+    check('弹窗含当日一句话', /[。！]$/.test(modal?.copy ?? ''), true);
+    check('弹窗含领取按钮', modal?.hasClaim === true && /领取今日卡片/.test(modal?.claimText ?? ''), true);
+    await cdp.shot('25-growth-card-modal');
+
+    // 领取 → 轻动画 → 关闭；入口变「已领取」
+    await cdp.clickSelector('[data-growth-card-claim]');
+    await sleep(350);
+    const animating = await cdp.evaluate(`(() => ({
+      popping: Boolean(document.querySelector('.pixel-card-pop')),
+      bodyScale: (() => { const b = document.querySelector('[data-growth-card-body]'); return b ? getComputedStyle(b).transform : null; })(),
     }))()`);
-    console.log(`      签退后：${JSON.stringify(afterOut)}`);
-    check('签退后显示时长（total_minutes 由打卡/签退派生）', afterOut.hasMinutes === true && Number(afterOut.minutes) >= 0, true);
-    check('签退后文案为已签退', String(afterOut.text).includes('已签退'), true);
-    const dupOut = await api('POST', '/attendance/check-out', childToken, {});
-    check('重复签退 → 409', dupOut.status, 409);
-    // ⑤ 月度历史点阵（今日应被标记）
-    await cdp.send('Page.navigate', { url: `${BASE}/attendance` });
-    await cdp.waitFor('[data-attendance-day]');
-    await sleep(600);
-    const history = await cdp.evaluate(`(() => {
-      const hits = [...document.querySelectorAll('[data-attendance-day][data-attendance-hit="true"]')];
-      const todayCell = document.querySelector('[data-today-state]');
+    check('领取时播放轻动画（图片放大 / 卡片收起）', animating.popping === true || animating.bodyScale !== 'none', true);
+    await sleep(2200);
+    const afterClaim = await cdp.evaluate(`(() => {
+      const entry = document.querySelector('[data-growth-card-entry]');
       return {
-        total: document.querySelectorAll('[data-attendance-day]').length,
-        hits: hits.length,
-        todayState: todayCell ? todayCell.getAttribute('data-today-state') : null,
+        modalOpen: Boolean(document.querySelector('[data-growth-card-modal]')),
+        claimed: entry ? entry.getAttribute('data-growth-card-claimed') : null,
+        entryText: (entry?.innerText ?? '').replace(/\\n/g, ' '),
       };
     })()`);
-    console.log(`      打卡历史：${JSON.stringify(history)}`);
-    check('月度点阵渲染（当月天数格）', Number(history.total) >= 28, true);
-    check('今天已打卡在月度点阵中被标记', Number(history.hits) >= 1, true);
-    check('历史页今日状态为已签退', history.todayState, 'CHECKED_OUT');
-    await cdp.shot('25-attendance-history');
+    console.log(`      领取后：${JSON.stringify(afterClaim)}`);
+    check('领取后弹窗自动关闭', afterClaim.modalOpen, false);
+    check('入口变为已领取状态', afterClaim.claimed, 'true');
+    check('已领取文案不含打卡时刻', /今日成长卡已领取/.test(afterClaim.entryText) && !/\\d{2}:\\d{2}/.test(afterClaim.entryText), true);
+    await cdp.shot('26-growth-card-claimed');
+    // 业务规则未变：每天最多一张
+    const dupClaim = await api('POST', '/attendance/check-in', childToken, {});
+    check('同一天重复领取 → 409（每日限一张，规则未改）', dupClaim.status, 409);
+
+    // 今日成长记录页（收集的卡片；不展示签到时间/签退）
+    await cdp.send('Page.navigate', { url: `${BASE}/growth-cards` });
+    await cdp.waitFor('[data-growth-card-item]');
+    await sleep(500);
+    const record = await cdp.evaluate(`(() => {
+      const items = [...document.querySelectorAll('[data-growth-card-item]')];
+      const text = String(document.body.innerText);
+      return {
+        count: items.length,
+        first: items[0] ? items[0].getAttribute('data-growth-card-item') : null,
+        hasImg: items[0] ? Boolean(items[0].querySelector('img')) : false,
+        hasAttendanceWord: ['签退', '已打卡', '打卡时间', '考勤', '打卡成功'].filter((w) => text.includes(w)),
+      };
+    })()`);
+    console.log(`      成长记录：${JSON.stringify(record)}`);
+    check('成长记录页列出已领取的卡片', Number(record.count) >= 1 && record.hasImg === true, true);
+    check('成长记录页无考勤措辞', record.hasAttendanceWord.length, 0);
+    await cdp.shot('27-growth-cards');
   } finally {
     clearTimeout(watchdog);
     try {

@@ -121,11 +121,28 @@ body {
   animation: pixel-sheen 620ms ease-out forwards;
 }
 
+/* 领取成长卡：图片轻微放大 → 收回（用户要求"非常轻"） */
+@keyframes pixel-card-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1.16);
+  }
+}
+.pixel-card-pop {
+  animation: pixel-card-pop 900ms ease-out forwards;
+}
+
 /* 尊重系统的"减少动态效果"偏好 */
 @media (prefers-reduced-motion: reduce) {
   .pixel-marker-pop,
   .pixel-spark,
-  .pixel-sheen {
+  .pixel-sheen,
+  .pixel-card-pop {
     animation: none !important;
   }
 }
