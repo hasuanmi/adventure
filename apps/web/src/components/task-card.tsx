@@ -133,12 +133,12 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
             {task.color && (
               <span aria-hidden className="h-3 w-3 shrink-0 border-2 border-ink" style={{ backgroundColor: task.color }} />
             )}
-            <span className="truncate text-[14px] font-extrabold text-ink" data-task-title>{task.title}</span>
+            <span className="truncate text-[15px] font-extrabold text-ink" data-task-title>{task.title}</span>
           </span>
           {/* 两个 chip：状态 + 任务类型（Demo 一致） */}
           <span className="mt-1 flex flex-wrap items-center gap-1">
             <TaskStatusBadge status={task.status} />
-            <span className="border-2 border-ink bg-panel px-1 py-0.5 text-[10px] font-bold text-ink">
+            <span className="border-2 border-ink bg-panel px-1 py-0.5 text-[11px] font-bold text-ink">
               {taskTypeLabel(task.rewardProfile)}
             </span>
             {task.requiresApproval && (
@@ -148,7 +148,7 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
             )}
           </span>
           {meta.length > 0 && (
-            <span className="mt-0.5 block truncate text-[10px] text-inkSoft">{meta.join(' · ')}</span>
+            <span className="mt-0.5 block truncate text-[11px] text-inkSoft">{meta.join(' · ')}</span>
           )}
         </span>
 
