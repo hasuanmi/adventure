@@ -87,7 +87,7 @@ export function AppLayout({
             />
           </Link>
           {/* 中部：产品品牌（整个 Header 的视觉中心）+ 日期作副信息（无边框/无按钮/不占卡片） */}
-          <span className="flex min-w-0 flex-1 flex-col items-center justify-center leading-none">
+          <span className="relative flex min-w-0 flex-1 items-center justify-center leading-none">
             <span
               data-brand-title
               className="whitespace-nowrap text-[19px] font-extrabold tracking-[0.28em] text-panelLight"
@@ -95,7 +95,7 @@ export function AppLayout({
             >
               冒险之旅
             </span>
-            <span data-brand-date className="mt-1 whitespace-nowrap text-[10px] font-bold tracking-wider text-panelLight/70">
+            <span data-brand-date className="absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold tracking-wider text-panelLight/70">
               {dateLabel}
             </span>
           </span>
