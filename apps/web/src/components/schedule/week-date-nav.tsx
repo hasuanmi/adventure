@@ -24,6 +24,7 @@ export function WeekDateNav({
     accum: number;
     active: boolean;
     moved: boolean;
+    captured: boolean;
     lastX: number;
     lastT: number;
     v: number;
@@ -40,16 +41,23 @@ export function WeekDateNav({
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     dragRef.current = {
-      startX: e.clientX, startDate: selectedDate, accum: 0, active: true, moved: false,
+      startX: e.clientX, startDate: selectedDate, accum: 0, active: true, moved: false, captured: false,
       lastX: e.clientX, lastT: performance.now(), v: 0, samples: 0,
     };
     suppressClickRef.current = false;
-    e.currentTarget.setPointerCapture?.(e.pointerId);
+    // 关键：这里**不能**立刻 setPointerCapture。指针捕获会把后续 click 事件重定向到
+    // 捕获元素（=本容器），日期按钮自身的 onClick 就永远不会触发 —— 之前"日期点不动"
+    // 就是这个原因。改为移动超过阈值后才捕获（见 onPointerMove）。
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = dragRef.current;
     if (!d?.active) return;
+    // 超过 8px 才算拖动：此时才捕获指针，保证普通点击仍由按钮处理
+    if (!d.captured && Math.abs(e.clientX - d.startX) > 8) {
+      d.captured = true;
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    }
     const now = performance.now();
     const dt = now - d.lastT;
     const dx = e.clientX - d.lastX;
@@ -68,7 +76,7 @@ export function WeekDateNav({
     }
   };
 
-  const endDrag = () => {
+  const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = dragRef.current;
     if (!d) return;
     if (d.moved) {
@@ -76,6 +84,13 @@ export function WeekDateNav({
       const fling = d.samples >= 2 ? Math.min(2, Math.max(-2, Math.round(d.v * 100))) : 0;
       const total = d.accum + fling;
       if (total !== 0) onSelect(addDays(d.startDate, total));
+    } else if (d.captured) {
+      // 捕获过指针但未跨格（例如 8–21px 的手抖）：此时 click 可能被重定向到容器，
+      // 按最终指针坐标兜底选中对应日期，保证"点了就是选中"。
+      suppressClickRef.current = true;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const index = Math.floor(((e.clientX - rect.left) / rect.width) * days.length);
+      onSelect(days[Math.min(days.length - 1, Math.max(0, index))]);
     }
     dragRef.current = null;
     setShift(0);
@@ -126,6 +141,7 @@ export function WeekDateNav({
               key={d.toISOString()}
               type="button"
               aria-pressed={isSelected}
+              aria-label={`选择 ${d.getMonth() + 1}月${d.getDate()}日`}
               onClick={() => {
                 if (suppressClickRef.current) {
                   suppressClickRef.current = false;
@@ -134,7 +150,7 @@ export function WeekDateNav({
                 onSelect(d);
               }}
               className={cn(
-                'flex flex-col items-center gap-0.5 border-b-2 px-1 pb-1 pt-1.5 text-xs font-bold transition-colors',
+                'flex cursor-pointer flex-col items-center gap-0.5 border-b-2 px-1 pb-1 pt-1.5 text-xs font-bold transition-colors',
                 isSelected ? 'border-accent bg-panelLight text-ink' : 'border-transparent text-ink hover:bg-panelLight',
               )}
             >

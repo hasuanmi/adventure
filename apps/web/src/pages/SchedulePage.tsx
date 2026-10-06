@@ -88,6 +88,7 @@ export function SchedulePage() {
         ]}
         onSelectTask={(t) => navigate(`/tasks/${t.id}`)}
         onSlotClick={(d, minute) => openCreate(toLocalInputValue(dateAtMinute(d, minute)))}
+        onSelectDay={(d) => setSelectedDate(d)}
       />
 
       {!hasPlan && (

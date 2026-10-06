@@ -102,6 +102,41 @@ export function toDateInputValue(d: Date): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/** 新建任务的默认时长（分钟） */
+export const DEFAULT_SLOT_MINUTES = 60;
+
+/**
+ * 新建任务的默认时段（datetime-local 本地字符串，日期固定为「今天」，用户可改）。
+ *
+ * 规则（参考 TaskLabs `schedule-constraints.ts`：新事件不得从过去开始 + 默认 60 分钟）：
+ * - 开始 = 下一个整点（正好整点则用当前整点）
+ * - 不早于日程窗口起点 07:30；不跨天（最晚 23:55，此时时长自动压缩到当天结束）
+ * - 结束 = 开始 + 60 分钟
+ * 这样新建的任务默认就落在日程上，不需要手填时间即可看到。
+ */
+export function defaultTaskSlot(now: Date = new Date()): { startAt: string; endAt: string } {
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const onTheHour = now.getMinutes() === 0 && now.getSeconds() === 0;
+  let startMin = onTheHour ? nowMin : (Math.floor(nowMin / 60) + 1) * 60;
+  startMin = Math.max(startMin, SCHEDULE_START_MIN); // 不早于 07:30
+  if (startMin > 23 * 60 + 55) startMin = Math.min(Math.ceil((nowMin + 1) / 5) * 5, 23 * 60 + 55);
+  if (startMin < nowMin) startMin = Math.min(Math.ceil((nowMin + 1) / 5) * 5, 23 * 60 + 55);
+  const endMin = Math.min(startMin + DEFAULT_SLOT_MINUTES, 23 * 60 + 59);
+  return {
+    startAt: toLocalInputValue(dateAtMinute(now, startMin)),
+    endAt: toLocalInputValue(dateAtMinute(now, endMin)),
+  };
+}
+
+/** 由开始时间推导结束时间（+60 分钟；不跨天则压到 23:59） */
+export function endAtFromStart(startLocalValue: string): string {
+  const start = new Date(startLocalValue);
+  if (Number.isNaN(start.getTime())) return '';
+  const end = new Date(start.getTime() + DEFAULT_SLOT_MINUTES * 60 * 1000);
+  const sameDayEnd = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 23, 59);
+  return toLocalInputValue(end.getTime() > sameDayEnd.getTime() ? sameDayEnd : end);
+}
+
 export interface TaskTimeFields {
   startAt?: string | null;
   endAt?: string | null;

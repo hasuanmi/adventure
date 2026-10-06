@@ -65,8 +65,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* 内容区：移动窄栏 / 桌面加宽（docs/ui-reference.md §2） */}
-      <main className="mx-auto w-full max-w-md px-3 py-4 md:max-w-2xl">{children}</main>
+      {/* 内容区：移动窄栏 / 桌面加宽（docs/ui-reference.md §2）
+          pb 需大于底部导航高度：导航是 sticky bottom-2，否则内容会被压在导航下面
+          （日程页的 62vh 网格实测被遮住，见 scripts/browser-check.mjs） */}
+      <main className="mx-auto w-full max-w-md px-3 pb-28 pt-4 md:max-w-2xl">{children}</main>
 
       {/* 底部两格导航（今日｜日程） */}
       <nav className="sticky bottom-2 mx-auto mt-4 grid max-w-md grid-cols-2 gap-1 border-2 border-ink bg-ink p-1.5 shadow-pixel">

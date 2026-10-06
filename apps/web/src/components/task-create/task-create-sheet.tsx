@@ -9,7 +9,7 @@ import { familyApi } from '../../lib/api/family';
 import { tasksApi } from '../../lib/api/tasks';
 import { rewardProfilesApi } from '../../lib/api/reward-profiles';
 import { taskFormSchema, type TaskFormValues } from '../../lib/task-form-schema';
-import { toDateInputValue, toLocalInputValue } from '../../lib/schedule';
+import { toDateInputValue, toLocalInputValue, defaultTaskSlot, endAtFromStart } from '../../lib/schedule';
 import { useUser } from '../../hooks/use-user';
 import { COLOR_PRESETS, PRIORITY_OPTIONS, SUBJECT_OPTIONS, WEEKDAY_REPEAT_OPTIONS } from '../../lib/constants';
 import { cn } from '../../lib/utils';
@@ -81,6 +81,11 @@ function TaskCreateSheetForm({
   // 家庭成员（P2 家庭入口）：替代手填 user uuid 作为审核人/孩子
   const familyQuery = useQuery({ queryKey: ['family'], queryFn: () => familyApi.me() });
 
+  // 新建时的默认时段：点日程时间格 → 所点时刻 + 1 小时；否则「今天 · 下一个整点起 1 小时」
+  const createSlot = defaultStartAt
+    ? { startAt: defaultStartAt, endAt: endAtFromStart(defaultStartAt) }
+    : defaultTaskSlot();
+
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskFormSchema),
     defaultValues: isEdit && task
@@ -103,12 +108,14 @@ function TaskCreateSheetForm({
         }
       : {
           // 创建默认：截止日期统一今天（用户确认 #2；不随 Schedule 选中日期变化）
+          // 开始/结束时间默认「今天 + 下一个整点起 1 小时」（用户要求：默认今天、可修改）
+          // —— 这样新建任务默认就出现在日程上；点日程时间格创建时沿用所点时刻 + 1 小时。
           title: '',
           description: '',
           subject: '',
           priority: 0,
-          startAt: defaultStartAt ?? '',
-          endAt: '',
+          startAt: createSlot.startAt,
+          endAt: createSlot.endAt,
           dueDate: toDateInputValue(new Date()),
           estimatedMinutes: '',
           color: '',
@@ -241,7 +248,20 @@ function TaskCreateSheetForm({
 
         {/* 时间安排 */}
         <section>
-          <GroupLabel>时间安排</GroupLabel>
+          <div className="flex items-end justify-between gap-2">
+            <GroupLabel className="flex-1">时间安排</GroupLabel>
+            <button
+              type="button"
+              onClick={() => {
+                form.setValue('startAt', '');
+                form.setValue('endAt', '');
+              }}
+              className="mb-2 shrink-0 border-2 border-ink/40 bg-panelLight px-2 py-0.5 text-[11px] font-bold text-inkSoft hover:text-ink"
+              title="清空时间后该任务不进日程，只出现在今日待办"
+            >
+              清除时间（不排入日程）
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>开始时间</Label>
@@ -260,7 +280,9 @@ function TaskCreateSheetForm({
               <Input type="date" {...form.register('dueDate')} />
             </div>
           </div>
-          <p className="mt-1 text-xs text-inkSoft">填写开始+结束时间后，任务在日程显示为时段虚线块。</p>
+          <p className="mt-1 text-xs text-inkSoft">
+            默认「今天 · 下一个整点起 1 小时」，可直接改；填写开始+结束时间后，任务在日程显示为时段虚线块。
+          </p>
         </section>
 
         {/* 任务设置 */}
@@ -432,9 +454,14 @@ function TaskCreateSheetForm({
   );
 }
 
-function GroupLabel({ children }: { children: React.ReactNode }) {
+function GroupLabel({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="mb-2 border-b-2 border-dashed border-ink/40 pb-1 text-xs font-extrabold tracking-widest text-inkSoft">
+    <div
+      className={cn(
+        'mb-2 border-b-2 border-dashed border-ink/40 pb-1 text-xs font-extrabold tracking-widest text-inkSoft',
+        className,
+      )}
+    >
       {children}
     </div>
   );

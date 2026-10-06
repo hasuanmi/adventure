@@ -43,11 +43,13 @@ interface TwoDayGridProps {
   onSelectTask?: (task: TaskDto) => void;
   /** 点击时间轴空白区 → 创建任务（date + 当天分钟数；点击任务块不触发） */
   onSlotClick?: (date: Date, minute: number) => void;
+  /** 点击列头日期 → 跳到该日日程（把该日变成左列） */
+  onSelectDay?: (date: Date) => void;
 }
 
 // 主体结构参考 TaskLabs CalendarWeek（header 网格 + 左 sticky 时间刻度 + 日列 + 绝对定位事件块）
 // 改造：7 列 → 2 列；24h → 07:30–21:30；列标签 = 今天/明天/日期；视觉 = 旧 Demo 像素。
-export function TwoDayGrid({ days, today, onSelectTask, onSlotClick }: TwoDayGridProps) {
+export function TwoDayGrid({ days, today, onSelectTask, onSlotClick, onSelectDay }: TwoDayGridProps) {
   const labels = hourLabels();
 
   function handleColumnClick(e: React.MouseEvent<HTMLDivElement>, d: Date) {
@@ -72,17 +74,38 @@ export function TwoDayGrid({ days, today, onSelectTask, onSlotClick }: TwoDayGri
         {days.map((d) => {
           const isToday = isSameDay(d.date, today);
           const isTomorrow = isSameDay(d.date, addDays(today, 1));
-          return (
-            <div key={d.date.toISOString()} className="px-1 py-2 text-center">
+          const title = isToday ? '今天' : isTomorrow ? '明天' : `${d.date.getMonth() + 1}月${d.date.getDate()}日`;
+          const subtitle = isToday || isTomorrow ? dayTitle(d.date) : `周${weekdayCn(d.date)}`;
+          const headerClass = cn(
+            'px-1 py-2 text-center transition-colors',
+            onSelectDay && 'cursor-pointer hover:bg-panelLight active:translate-y-0.5',
+          );
+          const content = (
+            <>
               <div
                 className="text-xs font-extrabold tracking-widest text-ink"
                 style={{ textShadow: '1px 1px 0 rgba(58,42,30,0.25)' }}
               >
-                {isToday ? '今天' : isTomorrow ? '明天' : `${d.date.getMonth() + 1}月${d.date.getDate()}日`}
+                {title}
               </div>
-              <div className="mt-0.5 text-[11px] font-bold text-inkSoft">
-                {isToday || isTomorrow ? dayTitle(d.date) : `周${weekdayCn(d.date)}`}
-              </div>
+              <div className="mt-0.5 text-[11px] font-bold text-inkSoft">{subtitle}</div>
+            </>
+          );
+          // 表头可点：跳到该日日程（原实现是纯 div，点不动）
+          return onSelectDay ? (
+            <button
+              key={d.date.toISOString()}
+              type="button"
+              data-day-header
+              onClick={() => onSelectDay(d.date)}
+              aria-label={`跳到 ${d.date.getMonth() + 1}月${d.date.getDate()}日 日程`}
+              className={headerClass}
+            >
+              {content}
+            </button>
+          ) : (
+            <div key={d.date.toISOString()} data-day-header className={headerClass}>
+              {content}
             </div>
           );
         })}

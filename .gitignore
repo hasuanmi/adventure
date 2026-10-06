@@ -10,6 +10,10 @@ build/
 # 受限环境下的 vite/esbuild 临时目录（见 docs/p2-closure-record.md §6）
 .tmp-esbuild/
 
+# 浏览器 UI 检查产物（scripts/browser-check.mjs）
+ui-shots/
+ui-check.log
+
 # env
 .env
 .env.local
