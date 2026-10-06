@@ -261,7 +261,6 @@ function TaskCreateSheetForm({
       <SheetHeader>
         <SheetTitle>{isEdit ? '编辑任务' : '新建任务'}</SheetTitle>
         <SheetDescription>
-          {isEdit ? '修改任务信息后保存' : '填写任务信息；可设置开始时间让它出现在日程'}
         </SheetDescription>
       </SheetHeader>
 
@@ -332,9 +331,6 @@ function TaskCreateSheetForm({
               <Input type="date" {...form.register('dueDate')} />
             </div>
           </div>
-          <p className="mt-1 text-xs text-inkSoft">
-            默认「今天 · 下一个整点起 1 小时」，可直接改；填写开始+结束时间后，任务在日程显示为时段虚线块。
-          </p>
           {conflicts.length > 0 && (
             <div
               data-conflict-warning
@@ -408,9 +404,6 @@ function TaskCreateSheetForm({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="mt-1 text-xs text-inkSoft">
-                来自系统配置，只显示名称；左侧图标 = 任务类型（日常/世界/风物/悬赏）。
-              </p>
             </div>
           </div>
 
@@ -452,9 +445,6 @@ function TaskCreateSheetForm({
                 );
               })}
             </div>
-            <p className="mt-1 text-xs text-inkSoft">
-              选择后该任务在今日列表/详情显示这枚图标；「自动」= 按下面的奖励档位类型显示。
-            </p>
           </div>
 
           {/* 颜色（8 预设色块，huahuastudy 样式；日程/卡片用色） */}
@@ -505,7 +495,6 @@ function TaskCreateSheetForm({
                 );
               })}
             </div>
-            <p className="mt-1 text-xs text-inkSoft">勾选后该任务每周固定星期出现在日程；完成/审批状态机不受影响。</p>
           </div>
         </section>
 
