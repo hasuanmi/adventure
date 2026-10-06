@@ -1,4 +1,3 @@
-import type { RewardProfileCategory } from '@huahua/shared-types';
 import { TASK_ICON_FALLBACK, TASK_ICON_KEYS } from './task-icons';
 
 // 任务图标 / 任务类型的展示映射（对齐旧项目 Demo proto-kid-v2）：
@@ -7,7 +6,7 @@ import { TASK_ICON_FALLBACK, TASK_ICON_KEYS } from './task-icons';
 // 素材与映射登记见 docs/opensource-mapping.md §二点十一，实施记录见 docs/p2-closure-record.md §14/§15。
 
 /** 奖励档分类 → 任务类型图标 key（图标库前 5 枚即 quest_icons 自研图标） */
-const ICON_KEY_BY_CATEGORY: Record<RewardProfileCategory, string> = {
+const ICON_KEY_BY_CATEGORY: Record<string, string> = {
   daily: 'daily',
   world: 'world',
   scenery: 'nature',
@@ -17,7 +16,7 @@ const ICON_KEY_BY_CATEGORY: Record<RewardProfileCategory, string> = {
 };
 
 /** 奖励档分类 → 类型文案（Demo 的第二个 chip） */
-const TYPE_LABEL_BY_CATEGORY: Record<RewardProfileCategory, string> = {
+const TYPE_LABEL_BY_CATEGORY: Record<string, string> = {
   daily: '日常任务',
   world: '科学人文素养',
   scenery: '人际交往',
@@ -33,7 +32,7 @@ export const TASK_TYPE_UNCLASSIFIED = '未分类';
  * 由奖励档 code 推断分类：code 前缀即分类（DAILY_/WORLD_/SCENERY_），其余（CUSTOM/未知）归 custom。
  * 与 shared-types 一致：`Task.rewardProfile = NULL` 业务上视为 CUSTOM。
  */
-export function categoryFromRewardProfileCode(code?: string | null): RewardProfileCategory {
+export function categoryFromRewardProfileCode(code?: string | null): string {
   const prefix = (code ?? 'CUSTOM').split('_')[0]?.toLowerCase();
   return prefix === 'daily' || prefix === 'world' || prefix === 'scenery' ? prefix : 'custom';
 }
@@ -47,7 +46,7 @@ export function taskTypeLabel(rewardProfile?: string | null): string {
 /** 任务卡左上角图标 URL：自选图标 > 类型图标 > 中性图标 */
 export function taskTileIconUrl(task: { icon?: string | null; rewardProfile?: string | null }): string {
   if (task.icon && TASK_ICON_KEYS.includes(task.icon)) return `/icons/${task.icon}.png`;
-  if (task.rewardProfile) return `/icons/${ICON_KEY_BY_CATEGORY[categoryFromRewardProfileCode(task.rewardProfile)]}.png`;
+  if (task.rewardProfile) return `/icons/${(ICON_KEY_BY_CATEGORY[categoryFromRewardProfileCode(task.rewardProfile)] ?? TASK_ICON_FALLBACK)}.png`;
   return `/icons/${TASK_ICON_FALLBACK}.png`;
 }
 
@@ -55,8 +54,8 @@ export function taskTileIconUrl(task: { icon?: string | null; rewardProfile?: st
 export const TASK_ICON_ADVENTURE_URL = '/icons/adventure.png';
 
 /** 奖励档分组标签用的类型图标（创建页下拉） */
-export function categoryIconUrl(category: RewardProfileCategory): string {
-  return `/icons/${ICON_KEY_BY_CATEGORY[category]}.png`;
+export function categoryIconUrl(category: string): string {
+  return `/icons/${ICON_KEY_BY_CATEGORY[category] ?? TASK_ICON_FALLBACK}.png`;
 }
 
 /** 选中某奖励档时，触发器里显示的图标 */
