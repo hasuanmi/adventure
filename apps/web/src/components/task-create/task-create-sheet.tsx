@@ -130,7 +130,7 @@ function TaskCreateSheetForm({
           repeatWeekdays: 0,
           requiresApproval: false,
           reviewerId: '',
-          rewardProfile: '',
+          rewardProfile: 'TYPE_DAILY',
           childId: '',
         },
   });
@@ -369,7 +369,7 @@ function TaskCreateSheetForm({
               </Select>
             </div>
             <div>
-              <Label>奖励档位</Label>
+              <Label>任务类型</Label>
               <Select value={form.watch('rewardProfile')} onValueChange={(v) => form.setValue('rewardProfile', v)}>
                 <SelectTrigger>
                   <span className="flex items-center gap-2">

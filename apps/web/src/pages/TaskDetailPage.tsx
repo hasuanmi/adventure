@@ -257,7 +257,7 @@ export function TaskDetailPage() {
             <dd className="text-ink">{task.priority === 2 ? '高' : task.priority === 1 ? '普通' : '低'}</dd>
           </div>
           <div>
-            <dt className="text-xs font-bold text-inkSoft">奖励档位</dt>
+            <dt className="text-xs font-bold text-inkSoft">任务类型</dt>
             <dd className="text-ink">{rewardLabel}</dd>
           </div>
           <div>

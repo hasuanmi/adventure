@@ -21,9 +21,16 @@ export const REWARD_PROFILE_CODES = [
 export type RewardProfileCode = (typeof REWARD_PROFILE_CODES)[number];
 
 /** Task.rewardProfile = NULL 业务上视为 CUSTOM（不强制写入） */
-export const REWARD_PROFILE_DEFAULT_CODE = 'CUSTOM';
+export const REWARD_PROFILE_DEFAULT_CODE = 'TYPE_DAILY';
 
-export const REWARD_PROFILE_CATEGORIES = ['daily', 'world', 'scenery', 'custom'] as const;
+export const REWARD_PROFILE_CATEGORIES = [
+  'daily',
+  'world',
+  'scenery',
+  'bounty',
+  'physical',
+  'custom',
+] as const;
 export type RewardProfileCategory = (typeof REWARD_PROFILE_CATEGORIES)[number];
 
 /** 前端摘要（不含奖励数值——创建下拉不显示数值） */

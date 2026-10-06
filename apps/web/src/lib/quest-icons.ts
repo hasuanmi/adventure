@@ -11,15 +11,19 @@ const ICON_KEY_BY_CATEGORY: Record<RewardProfileCategory, string> = {
   daily: 'daily',
   world: 'world',
   scenery: 'nature',
+  bounty: 'bounty',
+  physical: 'tree',
   custom: 'bounty',
 };
 
 /** 奖励档分类 → 类型文案（Demo 的第二个 chip） */
 const TYPE_LABEL_BY_CATEGORY: Record<RewardProfileCategory, string> = {
   daily: '日常任务',
-  world: '世界任务',
-  scenery: '风物任务',
-  custom: '悬赏任务',
+  world: '科学人文素养',
+  scenery: '人际交往',
+  bounty: '悬赏任务',
+  physical: '体能锻炼',
+  custom: '自定义任务',
 };
 
 /** 未设置奖励档（NULL）在 Demo 里显示为「未分类」 */
