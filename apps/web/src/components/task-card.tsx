@@ -79,18 +79,13 @@ export function TaskCard({ task }: { task: TaskDto }) {
         data-task-card-toggle
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-3 p-3 pr-2 text-left transition hover:bg-panelLight"
+        className="flex w-full items-center gap-2.5 p-2.5 pr-2 text-left transition hover:bg-panelLight"
       >
-        {/* 图标 tile（64px，自选图标 > 类型图标 > 中性图标）+ 像素角饰 */}
-        <span className="relative grid h-16 w-16 shrink-0 place-items-center border-2 border-ink bg-panelLight shadow-pixel">
-          <img
-            src={taskTileIconUrl(task)}
-            alt=""
-            aria-hidden
-            className="h-12 w-12 [image-rendering:pixelated]"
-          />
-          <span aria-hidden className="absolute -left-1 -top-1 h-2 w-2 bg-accent" />
-          <span aria-hidden className="absolute -bottom-1 -right-1 h-2 w-2 bg-accent" />
+        {/* 图标 tile（44px 见方，对齐 Demo 比例；内嵌 32px 原生图标 → 像素不糊）+ 像素角饰 */}
+        <span className="relative grid h-11 w-11 shrink-0 place-items-center border-2 border-ink bg-panelLight shadow-pixel">
+          <img src={taskTileIconUrl(task)} alt="" aria-hidden className="h-8 w-8 [image-rendering:pixelated]" />
+          <span aria-hidden className="absolute -left-1 -top-1 h-1.5 w-1.5 bg-accent" />
+          <span aria-hidden className="absolute -bottom-1 -right-1 h-1.5 w-1.5 bg-accent" />
         </span>
 
         <span className="min-w-0 flex-1">
@@ -98,26 +93,28 @@ export function TaskCard({ task }: { task: TaskDto }) {
             {task.color && (
               <span aria-hidden className="h-3 w-3 shrink-0 border-2 border-ink" style={{ backgroundColor: task.color }} />
             )}
-            <span className="truncate text-base font-extrabold text-ink">{task.title}</span>
+            <span className="truncate text-[15px] font-extrabold text-ink">{task.title}</span>
           </span>
           {/* 两个 chip：状态 + 任务类型（Demo 一致） */}
-          <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="mt-1 flex flex-wrap items-center gap-1">
             <TaskStatusBadge status={task.status} />
-            <span className="border-2 border-ink bg-panel px-1.5 py-0.5 text-xs font-bold text-ink">
+            <span className="border-2 border-ink bg-panel px-1 py-0.5 text-[11px] font-bold text-ink">
               {taskTypeLabel(task.rewardProfile)}
             </span>
             {task.requiresApproval && (
-              <span className="border-2 border-warning/70 bg-panelLight px-1.5 py-0.5 text-xs font-bold text-ink">
+              <span className="border-2 border-warning/70 bg-panelLight px-1 py-0.5 text-[11px] font-bold text-ink">
                 需确认
               </span>
             )}
           </span>
-          {meta.length > 0 && <span className="mt-1 block truncate text-xs text-inkSoft">{meta.join(' · ')}</span>}
+          {meta.length > 0 && (
+            <span className="mt-0.5 block truncate text-[11px] text-inkSoft">{meta.join(' · ')}</span>
+          )}
         </span>
 
         <ChevronDown
           aria-hidden
-          className={cn('h-5 w-5 shrink-0 text-inkSoft transition-transform', expanded && 'rotate-180')}
+          className={cn('h-4 w-4 shrink-0 text-inkSoft transition-transform', expanded && 'rotate-180')}
         />
       </button>
 

@@ -26,7 +26,8 @@ export function WeekCheckin({ className }: { className?: string }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-7 gap-1.5">
+      {/* 7 个正方形格子 + 格间空隙（对齐 Demo：格子是方形、彼此留白，不是全宽矩形） */}
+      <div className="mt-1 flex items-start justify-between gap-2">
         {days.map((d) => {
           const key = toDateInputValue(d);
           const hit = hitDays.has(key);
@@ -42,7 +43,7 @@ export function WeekCheckin({ className }: { className?: string }) {
                 data-checkin-cell
                 data-checkin-state={hit ? 'done' : isToday ? 'today' : 'none'}
                 className={cn(
-                  'grid h-10 w-full place-items-center border-2 border-ink text-lg font-extrabold shadow-pixel',
+                  'grid h-10 w-10 place-items-center border-2 border-ink text-lg font-extrabold shadow-pixel',
                   hit ? 'bg-ok text-white' : isToday ? 'bg-warning text-white' : 'bg-panelLight text-inkSoft',
                   isToday && 'ring-2 ring-accent',
                   future && !hit && !isToday && 'opacity-45',

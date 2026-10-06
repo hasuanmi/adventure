@@ -624,13 +624,13 @@ async function main() {
     })()`);
     check('今日页使用素材库图标（HUD + 任务卡 tile，≥2 处）', questImgs.count >= 2, true);
     check('素材库图标全部加载成功（public/icons 资源可用）', questImgs.loaded, questImgs.count);
-    // 卡片尺寸按 Demo 放大：tile 图标渲染尺寸应 >= 40px
+    // 卡片尺寸对齐 Demo 比例：图标约 32px（tile 44px），不要做成"大图标巨卡"
     const tileSize = await cdp.evaluate(`(() => {
       const t = document.querySelector('[data-task-card-toggle]');
       const img = t ? t.querySelector('img[src^="/icons/"]') : null;
       return img ? Math.round(img.getBoundingClientRect().width) : 0;
     })()`);
-    check('任务卡图标已按 Demo 放大（≥40px）', Number(tileSize) >= 40, true);
+    check('任务卡图标尺寸贴合 Demo 比例（28–48px）', Number(tileSize) >= 28 && Number(tileSize) <= 48, true);
 
     // ---------- 10. 任务详情页微调（类型图标/进度/完成标准） ----------
     await cdp.send('Page.navigate', { url: `${BASE}/tasks/${taskId}` });
@@ -684,6 +684,20 @@ async function main() {
       'done',
     );
     check('已打卡格数 ≥1', checkin.states.filter((c) => c.state === 'done').length >= 1, true);
+    // 打卡格几何（对齐 Demo：正方形小格 + 格间留白，不是全宽矩形）
+    const checkinGeo = await cdp.evaluate(`(() => {
+      const cells = [...document.querySelectorAll('[data-checkin-cell]')].map((c) => c.getBoundingClientRect());
+      const gaps = cells.slice(1).map((r, i) => Math.round(r.left - cells[i].right));
+      return {
+        w: Math.round(cells[0].width),
+        h: Math.round(cells[0].height),
+        maxWidth: Math.round(Math.max(...cells.map((r) => r.width))),
+        minGap: Math.round(Math.min(...gaps)),
+      };
+    })()`);
+    check('打卡格是正方形（宽高差 ≤2px）', Math.abs(checkinGeo.w - checkinGeo.h) <= 2, true);
+    check('打卡格不铺满整宽（≤56px）', checkinGeo.maxWidth <= 56, true);
+    check('打卡格之间有留白（≥8px）', checkinGeo.minGap >= 8, true);
     // 滚动到打卡区再截图（否则被浮动导航压住，人工复核看不到）
     await cdp.evaluate(
       `document.querySelector('[data-checkin-cell]')?.closest('div.border-2')?.scrollIntoView({ block: 'center' })`,
@@ -719,7 +733,7 @@ async function main() {
       return { src: img ? img.getAttribute('src') : null, w: img ? Math.round(img.getBoundingClientRect().width) : 0 };
     })()`);
     check('新建任务卡片显示自选图标', String(newCard?.src ?? '').includes('/icons/sheep.png'), true);
-    check('自选图标渲染尺寸合理（≥40px）', Number(newCard?.w ?? 0) >= 40, true);
+    check('自选图标渲染尺寸贴合 Demo（28–48px）', Number(newCard?.w ?? 0) >= 28 && Number(newCard?.w ?? 0) <= 48, true);
   } finally {
     clearTimeout(watchdog);
     try {
