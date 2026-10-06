@@ -223,7 +223,7 @@ body {
   position: absolute;
   width: 6px;
   height: 6px;
-  background: var(--accent);
+  background: var(--ink);
   pointer-events: none;
 }
 .pixel-notch::before {

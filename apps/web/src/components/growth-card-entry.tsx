@@ -50,7 +50,7 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
           <span
             data-growth-card-badge
             className={cn(
-              'relative z-0 grid h-14 w-14 place-items-center overflow-visible rounded-full border-[3px] border-ink',
+              'relative grid h-14 w-14 place-items-center overflow-visible rounded-full border-[3px] border-ink',
             )}
           >
             <img
@@ -59,7 +59,7 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
               aria-hidden
               data-growth-card-rays
               style={{ width: 200, height: 200 }}
-              className="pixel-blink pointer-events-none absolute left-1/2 top-1/2 -z-10 -translate-x-1/2 -translate-y-1/2 object-contain [image-rendering:pixelated]"
+              className="pixel-blink pointer-events-none absolute left-1/2 top-1/2 z-0 -translate-x-1/2 -translate-y-1/2 object-contain [image-rendering:pixelated]"
             />
             <img
               src="/icons/chest.png"
