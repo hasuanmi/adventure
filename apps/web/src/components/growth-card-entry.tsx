@@ -51,7 +51,8 @@ export function GrowthCardEntry({ allDone }: GrowthCardEntryProps) {
             alt=""
             aria-hidden
             data-growth-card-rays
-            className="pixel-blink pointer-events-none absolute h-28 w-28 [image-rendering:pixelated]"
+            style={{ width: 112, height: 112 }}
+            className="pixel-blink pointer-events-none absolute object-contain [image-rendering:pixelated]"
           />
 
           {/* 圆形像素徽章（居中主体） */}
