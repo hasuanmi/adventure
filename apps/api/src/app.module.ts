@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { AiModule } from './ai/ai.module';
 import { ApprovalModule } from './approval/approval.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { AuthModule } from './auth/auth.module';
@@ -40,6 +41,7 @@ import { WrongQuestionModule } from './wrong-question/wrong-question.module';
     AttendanceModule,
     WrongQuestionModule,
     KnowledgeTagModule,
+    AiModule,
   ],
 })
 export class AppModule {}

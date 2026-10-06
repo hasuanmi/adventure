@@ -176,3 +176,39 @@ export const WRONG_QUESTION_REASON = {
   TAG_IN_USE: 'knowledge_tag_in_use',
 } as const;
 export type WrongQuestionReason = (typeof WRONG_QUESTION_REASON)[keyof typeof WRONG_QUESTION_REASON];
+
+// ---------------------------------------------------------------------------
+// AI（P6-3）：对照上游 lib/ai（gemini / openai / azure 三选一 + 9 个错误码）
+// 本项目决策：**先搭适配层，晚点接真模型** —— 未配置时返回明确错误码，不静默失败。
+// ---------------------------------------------------------------------------
+
+/** provider 类型（当前实现 OpenAI 兼容通道；上游另有 gemini/azure） */
+export const AI_PROVIDER_KINDS = ['openai-compatible'] as const;
+export type AiProviderKind = (typeof AI_PROVIDER_KINDS)[number];
+
+export const DEFAULT_AI_MODEL = 'gpt-4o-mini';
+
+export const AI_STATUS_REASON = {
+  NOT_CONFIGURED: 'ai_not_configured',
+} as const;
+
+/** 上游 9 个 AI 错误码的等价集合（前端按码提示，不做字符串匹配） */
+export const AI_ERROR_CODES = [
+  'ai_not_configured',
+  'ai_auth_error',
+  'ai_connection_failed',
+  'ai_timeout_error',
+  'ai_quota_exceeded',
+  'ai_service_unavailable',
+  'ai_response_error',
+  'ai_unknown_error',
+] as const;
+export type AiErrorCode = (typeof AI_ERROR_CODES)[number];
+
+export interface AiStatusDto {
+  configured: boolean;
+  provider: string;
+  model: string;
+  visionModel: string;
+  reason: string | null;
+}

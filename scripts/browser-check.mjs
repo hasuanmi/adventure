@@ -1554,6 +1554,34 @@ async function main() {
     const afterDelete = await api('GET', '/wrong-questions', childToken);
     const wqList = Array.isArray(afterDelete.json) ? afterDelete.json : (afterDelete.json?.items ?? []);
     check('删除后不再出现在列表（软删除）', wqList.some((w) => w.id === firstId) === false, true);
+
+    // ---------- 13h. AI 适配层（P6-3 骨架）：未配置时明确报错，且密钥绝不下发 ----------
+    const aiStatus = await api('GET', '/ai/status', childToken);
+    console.log(`      AI 状态：${JSON.stringify(aiStatus.json)}`);
+    check('AI 状态接口需登录（未带 token 401）', (await api('GET', '/ai/status', '')).status, 401);
+    check(
+      'AI 状态结构齐全（configured/provider/model/reason）',
+      aiStatus.json &&
+        typeof aiStatus.json.configured === 'boolean' &&
+        'provider' in aiStatus.json &&
+        'model' in aiStatus.json &&
+        'reason' in aiStatus.json,
+      true,
+    );
+    check(
+      '未配置 base_url/model 时 reason 为 ai_not_configured',
+      aiStatus.json?.configured === false ? aiStatus.json?.reason === 'ai_not_configured' : true,
+      true,
+    );
+    check('AI 状态响应绝不包含密钥', String(JSON.stringify(aiStatus.json)).includes('sk-'), false);
+    const aiCall = await api('POST', '/ai/analyze', childToken, { text: '1+1=?' });
+    if (aiCall.status === 201) {
+      // 已配置真模型（用户已给 key 且填了 base_url/model）→ 校验返回结构
+      check('识题返回 raw + fields', typeof aiCall.json?.raw === 'string' && Boolean(aiCall.json?.fields), true);
+    } else {
+      check('未配置时调用识题返回明确错误（502）', aiCall.status, 502);
+      check('识题未配置 reason 为 ai_not_configured', aiCall.json?.reason, 'ai_not_configured');
+    }
   } finally {
     clearTimeout(watchdog);
     try {
