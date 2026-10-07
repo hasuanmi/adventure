@@ -62,3 +62,19 @@ export function categoryIconUrl(category: string): string {
 export function rewardProfileIconUrl(code?: string | null): string {
   return categoryIconUrl(categoryFromRewardProfileCode(code));
 }
+
+/** 「任务类型」chip 配色（按类型区分颜色；自定义/未分类不显示该 chip） */
+const TYPE_CHIP_BY_CATEGORY: Record<string, string> = {
+  daily: 'border-ink bg-[#4a9e6b] text-white',
+  world: 'border-ink bg-[#4a7fb5] text-white',
+  scenery: 'border-ink bg-[#c46f16] text-white',
+  bounty: 'border-ink bg-[#c9a227] text-white',
+  physical: 'border-ink bg-[#a4574f] text-white',
+  custom: '',
+};
+
+/** 任务类型 chip 的 className；返回空串表示"不显示"（自定义任务） */
+export function taskTypeChipClass(rewardProfile?: string | null): string {
+  if (!rewardProfile) return '';
+  return TYPE_CHIP_BY_CATEGORY[categoryFromRewardProfileCode(rewardProfile)] ?? '';
+}

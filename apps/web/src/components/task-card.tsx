@@ -20,7 +20,7 @@ import { PixelBar } from './ui/pixel-bar';
 import { ApiError } from '../lib/api/client';
 import { tasksApi } from '../lib/api/tasks';
 import { formatHM, parseIso } from '../lib/schedule';
-import { taskTileIconUrl, taskTypeLabel } from '../lib/quest-icons';
+import { taskTileIconUrl, taskTypeLabel, taskTypeChipClass } from '../lib/quest-icons';
 import { taskProgress, taskProgressColor } from '../lib/task-progress';
 import { useUser } from '../hooks/use-user';
 import { cn } from '../lib/utils';
@@ -138,18 +138,23 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
           </span>
           {/* 两个 chip：状态 + 任务类型（Demo 一致） */}
           <span className="mt-1 flex flex-wrap items-center gap-1">
-            <TaskStatusBadge status={task.status} />
-            <span className="border-2 border-ink bg-panel px-1 py-0.5 text-[11px] font-bold text-ink">
-              {taskTypeLabel(task.rewardProfile)}
-            </span>
+<TaskStatusBadge status={task.status} />
+            {taskTypeChipClass(task.rewardProfile) ? (
+              <span
+                data-task-type-chip
+                className={`border-2 px-1 py-0.5 text-[11px] font-extrabold ${taskTypeChipClass(task.rewardProfile)}`}
+              >
+                {taskTypeLabel(task.rewardProfile)}
+              </span>
+            ) : null}
             {task.requiresApproval && (
-              <span className="border-2 border-warning/70 bg-panelLight px-1 py-0.5 text-[11px] font-bold text-ink">
-                需确认
+              <span className="border-2 border-ink bg-[#e0a234] px-1 py-0.5 text-[11px] font-extrabold text-white">
+                待检查
               </span>
             )}
           </span>
           {meta.length > 0 && (
-            <span className="mt-0.5 block truncate text-[11px] text-inkSoft">{meta.join(' · ')}</span>
+            <span className="mt-0.5 block truncate text-[11px] font-bold text-ink">{meta.join(' · ')}</span>
           )}
         </span>
 
@@ -194,7 +199,7 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
 
           {/* 完成标准 */}
           <p className="mt-3 text-xs font-bold text-inkSoft">完成标准</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm text-ink">
+          <p className="mt-1 whitespace-pre-wrap text-[11px] font-bold text-ink">
             {task.description?.trim() || <span className="text-inkSoft">（未填写完成标准）</span>}
           </p>
 
