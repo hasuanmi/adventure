@@ -94,7 +94,7 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
               alt=""
               aria-hidden
               className="pointer-events-none absolute object-cover [image-rendering:pixelated]"
-              style={{ left: "15%", top: "5%", width: "70%", height: "52%" }}
+              style={{ left: "8%", top: "10%", width: "84%", height: "48%" }}
             />
             <img
               data-growth-card-image
