@@ -252,3 +252,11 @@ body {
   border: 2px solid var(--gold-light);
   pointer-events: none;
 }
+/* 功能栏边框 = 参考图的"三线"结构：外棕线 -> 中间浅色线(::after) -> 内棕线(::before) */
+.pixel-frame-flat::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border: 2px solid var(--ink);
+  pointer-events: none;
+}
