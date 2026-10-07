@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ImagesService, ImageGenerationError } from '../images/images.service';
+import { FilesService } from '../files/files.service';
 
 /**
  * 每日成长卡生成服务（2026-10-07 用户方案 B）
@@ -67,6 +68,7 @@ export class GrowthCardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly images: ImagesService,
+    private readonly files: FilesService,
   ) {}
 
   /** 本地日期（YYYY-MM-DD）；成长卡按"自然日"归属 */
@@ -226,6 +228,7 @@ export class GrowthCardService {
    * @param regenerateImage 仅重试图片（文本沿用已保存结果，不重新生成、不重复扣记录）
    */
   async claimToday(userId: string, familyId: string, regenerateImage = false): Promise<GrowthCardDto> {
+    const actor = { sub: userId, familyId, role: 'child' };
     const { date } = this.today();
     const existing = await this.prisma.growthCard.findUnique({
       where: { userId_cardDate: { userId, cardDate: date } },
@@ -261,11 +264,12 @@ export class GrowthCardService {
     let status: string = GROWTH_CARD_STATUS.TEXT_READY_IMAGE_PENDING;
     try {
       const img = await this.images.generateCardFace(imagePrompt);
-      const saved = await this.saveImage(userId, date, img.buffer, img.contentType);
+      const saved = await this.saveImage(actor, userId, date, img.buffer, img.contentType);
       imageUrl = saved;
       status = GROWTH_CARD_STATUS.READY;
     } catch (err) {
-      const reason = err instanceof ImageGenerationError ? err.reason : 'provider_error';
+      const reason = err instanceof ImageGenerationError ? err.reason : 'internal_error';
+      this.logger.warn(`图片落盘/生成异常: ${(err as Error).message}`);
       this.logger.warn(`成长卡图片未生成（${reason}）：保留文本结果，等待重试`);
     }
 
@@ -289,17 +293,19 @@ export class GrowthCardService {
     return this.toDto(row);
   }
 
-  /** 落盘生成图（复用 files 模块的上传目录约定），返回可鉴权读取的 URL */
-  private async saveImage(userId: string, date: Date, buffer: Buffer, contentType: string): Promise<string> {
-    const fs = await import('node:fs/promises');
-    const path = await import('node:path');
-    const dir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
-    const sub = path.join(dir, 'growth-cards');
-    await fs.mkdir(sub, { recursive: true });
-    const ext = contentType.includes('jpeg') ? 'jpg' : 'png';
-    const name = `${userId}-${date.toISOString().slice(0, 10)}.${ext}`;
-    const full = path.join(sub, name);
-    await fs.writeFile(full, buffer);
-    return `/api/files/growth-cards/${name}`;
-  }
-}
+  /** 落盘生成图：直接复用 FilesService（同一存储布局与鉴权读取 URL /api/files?key=...） */
+  private async saveImage(
+    actor: { sub: string; familyId: string | null; role: string },
+    userId: string,
+    date: Date,
+    buffer: Buffer,
+    contentType: string,
+  ): Promise<string> {
+    const stored = await this.files.save(actor as never, 'growth-card', {
+      buffer,
+      size: buffer.length,
+      mimetype: contentType && contentType.startsWith('image/') ? contentType.split(';')[0].trim() : 'image/png',
+      originalname: `growth-card-${userId}-${date.toISOString().slice(0, 10)}`,
+    } as never);
+    return stored.url;
+  }}

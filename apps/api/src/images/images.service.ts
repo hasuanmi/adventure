@@ -110,8 +110,8 @@ export class ImagesService {
       throw new ImageGenerationError(`图片接口调用失败: ${(err as Error).message}`, 'provider_error');
     }
 
-    const data = (payload as { data?: { url?: string }[] })?.data;
-    const remoteUrl = data?.[0]?.url;
+    const shaped = payload as { images?: { url?: string }[]; data?: { url?: string }[] };
+    const remoteUrl = shaped?.images?.[0]?.url ?? shaped?.data?.[0]?.url;
     if (!remoteUrl) {
       throw new ImageGenerationError('图片接口未返回 url', 'empty_result');
     }
