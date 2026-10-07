@@ -11,11 +11,11 @@ export class GrowthController {
 
   @Get('me')
   async me(@CurrentUser() actor: RequestActor): Promise<UserGrowthDto> {
-    return this.growth.me(actor.sub);
+    return this.growth.me(await this.growth.subjectUserId(actor));
   }
 
   @Get('grants')
   async grants(@CurrentUser() actor: RequestActor): Promise<RewardGrantDto[]> {
-    return this.growth.grants(actor.sub);
+    return this.growth.grants(await this.growth.subjectUserId(actor));
   }
 }

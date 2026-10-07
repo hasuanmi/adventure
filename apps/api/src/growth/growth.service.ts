@@ -94,6 +94,25 @@ export class GrowthService {
   }
 
   /** 我的成长：余额 + 派生等级（等级不存储，v1.2 §18#3） */
+
+  /**
+   * Parent view: resolve the CHILD of the same family; other roles resolve to themselves.
+   * Read-side only — no change to XP / level / dimension calculation logic.
+   */
+  async subjectUserId(actor: {
+    sub: string;
+    role?: string | null;
+    familyId?: string | null;
+  }): Promise<string> {
+    if (actor.role !== 'parent' || !actor.familyId) return actor.sub;
+    const child = await this.prisma.user.findFirst({
+      where: { familyId: actor.familyId, role: 'child' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    return child?.id ?? actor.sub;
+  }
+
   async me(userId: string): Promise<UserGrowthDto> {
     const row = await this.prisma.userGrowth.findUnique({ where: { userId } });
     const zero = amounts();
