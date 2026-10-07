@@ -432,6 +432,15 @@ async function main() {
   try {
     // ---------- 2. 登录（真实输入 + 真实点击） ----------
     await cdp.send('Page.navigate', { url: `${BASE}/login` });
+  // ---- 手机视口模式（--mobile）：390x844 + 触摸 + 3x DPR，用于真机尺寸实测 ----
+  const MOBILE = args.includes('--mobile') || process.env.MOBILE === '1';
+  if (MOBILE) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: 390, height: 844, deviceScaleFactor: 3, mobile: true,
+    });
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    console.log('MOBILE MODE 390x844 (touch, dpr3)');
+  }
     await cdp.waitFor('#username');
     await cdp.shot('01-login');
     await cdp.type('#username', PARENT);
@@ -449,6 +458,28 @@ async function main() {
     const path1 = await cdp.evaluate('location.pathname');
     check('登录后进入首页', path1, '/');
     await cdp.shot('02-today');
+  // ---- 手机视口：逐页测量横向溢出（documentElement.scrollWidth 超出 window.innerWidth 即溢出）----
+  if (MOBILE) {
+    for (const p of ['/', '/schedule', '/tasks', '/growth', '/approvals']) {
+      await cdp.send('Page.navigate', { url: `${BASE}${p}` });
+      await sleep(1000);
+      const m = await cdp.evaluate(`(() => ({
+        path: location.pathname,
+        winW: window.innerWidth,
+        docW: document.documentElement.scrollWidth,
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+        offender: (() => {
+          const list = [...document.querySelectorAll('body *')]
+            .map((el) => ({ w: Math.round(el.getBoundingClientRect().width), cls: String(el.className).slice(0, 60) }))
+            .filter((x) => x.w > window.innerWidth + 2)
+            .sort((a, b) => b.w - a.w);
+          return list[0] ?? null;
+        })(),
+      }))()`);
+      console.log('MOBILE-OVERFLOW', JSON.stringify(m));
+      await cdp.shot(`m${p === '/' ? 'today' : p.replace(/\//g, '-')}-390`);
+    }
+  }
     if (path1 !== '/') throw new Error(`登录失败（仍在 ${path1}），后续 UI 断言无意义`);
 
     // ---------- 2b. 整页刷新后仍保持登录（会话引导 bootstrap） ----------
