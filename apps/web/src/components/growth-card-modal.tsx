@@ -93,14 +93,15 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
               src="/ui/growth-card-face.jpg"
               alt=""
               aria-hidden
-              className="pointer-events-none absolute object-cover [image-rendering:pixelated]"
+              className="pointer-events-none absolute z-0 object-cover [image-rendering:pixelated]"
               style={{ left: "8%", top: "10%", width: "84%", height: "48%" }}
             />
+
             <img
               data-growth-card-image
               src="/ui/card-frame.png"
               alt=""
-              className={`block w-full [image-rendering:pixelated] ${
+              className={`relative z-10 block w-full [image-rendering:pixelated] ${
                 collecting ? 'pixel-card-pop' : ''
               }`}
             />
