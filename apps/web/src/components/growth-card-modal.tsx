@@ -89,6 +89,14 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
           {/* 图片区：再套一层内描边（参考图的三层边框） */}
           <div className="relative border-2 border-ink bg-panelLight p-[3px]">
             <img
+              data-growth-card-face
+              src="/ui/growth-card-face.jpg"
+              alt=""
+              aria-hidden
+              className="pointer-events-none absolute object-cover [image-rendering:pixelated]"
+              style={{ left: "13%", top: "4.0%", width: "74%", height: "56.9%" }}
+            />
+            <img
               data-growth-card-image
               src="/ui/card-frame.png"
               alt=""
