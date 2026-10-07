@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown } from 'lucide-react';
 import { TaskDto, TaskStatusAction } from '@huahua/shared-types';
@@ -44,6 +44,7 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const progress = taskProgress(task.status);
+  const navigate = useNavigate();
   const action = INLINE_ACTION[task.status];
   const isOwnChild = user?.role === 'child' && task.childId === user.userId;
 
@@ -215,6 +216,11 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
                 disabled={mutation.isPending}
                 onClick={() => {
                   setNotice(null);
+                  if (action.action === 'complete') {
+                    // 完成凭证为必选：进入凭证页（填写文字/上传图片）后再提交
+                    navigate(`/tasks/${task.id}/submit`);
+                    return;
+                  }
                   mutation.mutate(action.action);
                 }}
                 className={cn(
