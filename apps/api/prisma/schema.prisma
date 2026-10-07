@@ -27,6 +27,7 @@ model User {
   growth        UserGrowth?
   rewardGrants  RewardGrant[]    @relation("GrantUser")
   attendances   Attendance[]     @relation("AttendanceUser")
+  growthCards   GrowthCard[]
 
   // 错题本相关归属（上游 User 上的字段/关系，原样保留）
   educationStage    String?          @map("education_stage") @db.VarChar(24)
@@ -403,4 +404,28 @@ model PracticeRecord {
   @@index([familyId], name: "idx_practice_records_family_id")
   @@index([childId], name: "idx_practice_records_child_id")
   @@map("practice_records")
+}
+
+// P6：每日成长卡（2026-10-07 方案 B：卡面由图片模型生成；文案由文本模型生成）
+// 唯一索引 (user_id, card_date) = 同一天最多一次；刷新页面必须读历史而非重新生成
+model GrowthCard {
+  id          String    @id @default(uuid()) @db.Uuid
+  familyId    String    @map("family_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  cardDate    DateTime  @map("card_date") @db.Date
+  theme       String    @db.VarChar(32)
+  title       String    @db.VarChar(64)
+  message     String    @db.VarChar(200)
+  imagePrompt String?   @map("image_prompt")
+  imageUrl    String?   @map("image_url") @db.VarChar(300)
+  status      String    @default("pending") @db.VarChar(32)
+  generatedAt DateTime? @map("generated_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cardDate])
+  @@index([familyId], name: "idx_growth_cards_family_id")
+  @@map("growth_cards")
 }

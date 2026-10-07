@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AiModule } from './ai/ai.module';
 import { ImagesModule } from './images/images.module';
+import { GrowthCardModule } from './growth-card/growth-card.module';
 import { ApprovalModule } from './approval/approval.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { AuthModule } from './auth/auth.module';
@@ -20,6 +21,7 @@ import { WrongQuestionModule } from './wrong-question/wrong-question.module';
 
 @Module({
   imports: [
+    GrowthCardModule,
     ImagesModule,
     ConfigModule.forRoot({
       isGlobal: true,
