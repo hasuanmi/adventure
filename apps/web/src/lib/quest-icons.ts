@@ -33,6 +33,16 @@ export const TASK_TYPE_UNCLASSIFIED = '未分类';
  * 与 shared-types 一致：`Task.rewardProfile = NULL` 业务上视为 CUSTOM。
  */
 export function categoryFromRewardProfileCode(code?: string | null): string {
+  // 2026-10-06：新增的 5 个任务类型（TYPE_*）——旧映射表只认原来的 16 个档位码，
+  // 不补这一步会让所有新类型都落到 custom，从而"类型标签整块不显示"（实测 bug）。
+  const TYPE_CATEGORY: Record<string, string> = {
+    TYPE_DAILY: 'daily',
+    TYPE_SCIENCE_HUMANITIES: 'world',
+    TYPE_SOCIAL: 'scenery',
+    TYPE_BOUNTY: 'bounty',
+    TYPE_PHYSICAL: 'physical',
+  };
+  if (code && TYPE_CATEGORY[code]) return TYPE_CATEGORY[code];
   const prefix = (code ?? 'CUSTOM').split('_')[0]?.toLowerCase();
   return prefix === 'daily' || prefix === 'world' || prefix === 'scenery' ? prefix : 'custom';
 }
