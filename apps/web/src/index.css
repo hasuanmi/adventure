@@ -245,13 +245,6 @@ body {
   border: 2px solid var(--ink);
   background: var(--accent);
 }
-.pixel-frame-flat::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border: 2px solid var(--gold-light);
-  pointer-events: none;
-}
 /* 功能栏边框 = 参考图的"三线"结构：外棕线 -> 中间浅色线(::after) -> 内棕线(::before) */
 .pixel-frame-flat::before {
   content: '';
@@ -259,4 +252,14 @@ body {
   inset: 7px;
   border: 2px solid var(--ink);
   pointer-events: none;
+}
+/* 功能栏/参考图2 的边框结构（用户澄清）：两条棕线之间夹**一整条浅色带**
+   外棕线(2px border) -> 浅色带(inset 5px) -> 内棕线(inset 7px) -> 内部橙金填充 */
+.pixel-frame-flat {
+  position: relative;
+  border: 2px solid var(--ink);
+  background: var(--accent);
+  box-shadow:
+    inset 0 0 0 5px var(--gold-light),
+    inset 0 0 0 7px var(--ink);
 }
