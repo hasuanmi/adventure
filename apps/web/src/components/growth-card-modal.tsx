@@ -61,7 +61,7 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
       // 打卡成功后**后台**生成/领取当天成长卡（幂等）：
       // 不 await —— 出图需要数秒，不能拖慢"领取"的关闭动画与入口状态。
       void growthCardsApi.claimToday().catch(() => {
-        /* 未就绪：状态由后端记录，前端稍后 refetch 时显示"成长卡正在准备中" */
+        /* 未就绪：状态由后端记录；图片稍后成功时，只读查询会自然展示 AI 卡面（界面不显示等待提示） */
       });
     },
     onSuccess: () => {
@@ -139,21 +139,6 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
             >
               {gc?.message ?? card.copy}
             </p>
-            {gc?.status === 'text_ready_image_pending' && (
-              <div className="absolute inset-x-0 bottom-[2%] z-20 flex flex-col items-center gap-1">
-                <p data-growth-card-pending className="text-[10px] font-bold text-ink">
-                  成长卡正在准备中，请稍后再试
-                </p>
-                <button
-                  type="button"
-                  data-growth-card-retry
-                  onClick={() => { void growthCardsApi.claimToday(true).then(() => cardQuery.refetch()); }}
-                  className="border-2 border-ink bg-accent px-2 py-0.5 text-[10px] font-extrabold text-white shadow-pixel"
-                >
-                  重试生成图片
-                </button>
-              </div>
-            )}
             {collecting && (
               <span aria-hidden className="pointer-events-none absolute inset-0">
                 {[
