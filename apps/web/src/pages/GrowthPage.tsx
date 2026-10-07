@@ -1,4 +1,4 @@
-﻿import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   DIMENSION_LABELS,
   SIX_DIMENSIONS,
@@ -103,6 +103,12 @@ export function GrowthPage() {
             </div>
           </div>
           <div className="shrink-0 border-2 border-ink/60 bg-panel/10 px-2 py-1.5 text-center">
+            <img
+              src="/ui/coin.png"
+              alt=""
+              aria-hidden
+              className="mx-auto mb-0.5 h-6 w-6 object-contain [image-rendering:pixelated]"
+            />
             <p className="text-[10px] text-panelLight/75">金币</p>
             <p className="text-base font-extrabold">{me.coins}</p>
           </div>
