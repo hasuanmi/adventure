@@ -243,6 +243,27 @@ class Cdp {
 }
 
 async function main() {
+  /** 完成凭证为必选：提交前填写凭证文字，否则前端会拦截提交 */
+  const fillProof = async () => {
+    await cdp.evaluate(`(() => {
+      const el = document.querySelector('input[placeholder*="凭证"]');
+      if (!el) return false;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(el, '凭证：已完成并附上记录');
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`);
+  };
+
+  /** 仅当卡片收起时才展开（盲目 toggle 会把已展开的卡片点收起，行内按钮随之消失） */
+  const expandCard = async (titlePart) => {
+    await cdp.evaluate(`(() => {
+      const el = [...document.querySelectorAll('[data-task-card-toggle]')].find((x) => x.textContent.includes(${JSON.stringify(titlePart)}));
+      if (el && el.getAttribute('aria-expanded') === 'false') el.click();
+      return Boolean(el);
+    })()`);
+    await sleep(400);
+  };
   // 看门狗：任何未预料的挂起都在 3 分钟后以明确退出码结束，避免 CI 卡到 job 超时
   const watchdog = setTimeout(() => {
     console.error('ERROR 全局超时（180s）：检查脚本疑似挂起，强制退出');
@@ -973,7 +994,7 @@ async function main() {
     await cdp.waitFor('[data-task-card-toggle]');
     const collapsed = await cdp.evaluate(`document.querySelector('[data-task-card-toggle]').getAttribute('aria-expanded')`);
     check('任务卡默认收起', collapsed, 'false');
-    await cdp.clickByText('[data-task-card-toggle]', taskTitle);
+    await expandCard(taskTitle);
     await sleep(500);
     const expandedFlag = await cdp.evaluate(
       `[...document.querySelectorAll('[data-task-card-toggle]')].find((e) => e.textContent.includes(${JSON.stringify(taskTitle)})).getAttribute('aria-expanded')`,
@@ -1006,7 +1027,7 @@ async function main() {
     check('本周打卡渲染 7 格', cells, 7);
     check('本周打卡初始 0/7（新孩子无流水）', String(await cdp.evaluate('document.body.innerText')).includes('已点亮 0/7'), true);
 
-    await cdp.clickByText('[data-task-card-toggle]', taskTitle);
+    await expandCard(taskTitle);
     await sleep(400);
     check('孩子侧出现行内「开始」', String(await cdp.cardText(taskTitle)).includes('▶ 开始'), true);
     await cdp.clickByText('button', '▶ 开始');
@@ -1018,15 +1039,49 @@ async function main() {
     await cdp.shot('08-child-after-start');
 
     // 完成（该任务 requiresApproval=true）→ 应进入"等待家长确认"，任务状态不变
+    // 真正"卡内"定位：先在文档里找到标题含「冲突A」的卡片，再在其内部点「▶ 开始」
+    await cdp.evaluate(`(() => {
+      const toggle = [...document.querySelectorAll('[data-task-card-toggle]')].find((x) => x.textContent.includes('冲突A'));
+      const root = toggle ? toggle.closest('div')?.parentElement ?? toggle.parentElement : null;
+      const btn = root ? [...root.querySelectorAll('button')].find((b) => b.textContent.includes('▶ 开始')) : null;
+      if (btn) btn.click();
+      return Boolean(btn);
+    })()`);
+    await sleep(1000);
     await cdp.clickByText('button', '✓ 完成');
+    // 完成凭证必选：进入凭证页 -> 填凭证 -> 提交 -> 回到首页（后续断言在首页任务卡上）
+    await cdp.waitFor('input[placeholder*="凭证"]');
+    await fillProof();
+    await cdp.clickByText('button', '提交完成');
+    await sleep(1200);
+    await cdp.send('Page.navigate', { url: `${BASE}/` });
+    await cdp.waitFor('[data-task-card-toggle]');
+    await sleep(600);
     await sleep(1500);
     const afterComplete = await cdp.cardText(taskTitle);
-    check('需审批任务点完成后提示等待家长确认', String(afterComplete).includes('等待家长确认'), true);
+    check('需审批任务点完成后显示「待检查」', String(afterComplete).includes('待检查') || String(afterComplete).includes('等待家长确认'), true);
     check('需审批任务提交后状态仍为进行中', String(afterComplete).includes('进行中'), true);
     await cdp.shot('09-child-submitted');
 
     // 再点一次完成 → 409（同一任务已有 pending 完成）应给出友好提示而不是崩溃
+    // 真正"卡内"定位：先在文档里找到标题含「冲突A」的卡片，再在其内部点「▶ 开始」
+    await cdp.evaluate(`(() => {
+      const toggle = [...document.querySelectorAll('[data-task-card-toggle]')].find((x) => x.textContent.includes('冲突A'));
+      const root = toggle ? toggle.closest('div')?.parentElement ?? toggle.parentElement : null;
+      const btn = root ? [...root.querySelectorAll('button')].find((b) => b.textContent.includes('▶ 开始')) : null;
+      if (btn) btn.click();
+      return Boolean(btn);
+    })()`);
+    await sleep(1000);
     await cdp.clickByText('button', '✓ 完成');
+    // 完成凭证必选：进入凭证页 -> 填凭证 -> 提交 -> 回到首页（后续断言在首页任务卡上）
+    await cdp.waitFor('input[placeholder*="凭证"]');
+    await fillProof();
+    await cdp.clickByText('button', '提交完成');
+    await sleep(1200);
+    await cdp.send('Page.navigate', { url: `${BASE}/` });
+    await cdp.waitFor('[data-task-card-toggle]');
+    await sleep(600);
     await sleep(1500);
     const afterDuplicate = await cdp.cardText(taskTitle);
     check('重复提交给出友好提示（未崩溃）', String(afterDuplicate).includes('已提交过') || String(afterDuplicate).includes('等待家长确认'), true);
@@ -1205,7 +1260,7 @@ async function main() {
     check('自选图标渲染尺寸贴合当前视觉（20–48px）', Number(newCard?.w ?? 0) >= 20 && Number(newCard?.w ?? 0) <= 48, true);
 
     // ---------- 13b. 取消任务（前端入口 + 二次确认 + 真删除） ----------
-    await cdp.clickByText('[data-task-card-toggle]', customTitle);
+    await expandCard(customTitle);
     await sleep(400);
     await cdp.clickSelector('[data-cancel-task]');
     await sleep(400);
@@ -1315,9 +1370,26 @@ async function main() {
     await cdp.shot('21-adventure-progress');
 
     // 行内点「完成」→ 真实进度变化 → 应出现动画（标记弹跳 + 粒子）
-    await cdp.clickByText('[data-task-card-toggle]', `冲突A ${STAMP}`);
+    await expandCard(`冲突A ${STAMP}`);
     await sleep(400);
+    // 真正"卡内"定位：先在文档里找到标题含「冲突A」的卡片，再在其内部点「▶ 开始」
+    await cdp.evaluate(`(() => {
+      const toggle = [...document.querySelectorAll('[data-task-card-toggle]')].find((x) => x.textContent.includes('冲突A'));
+      const root = toggle ? toggle.closest('div')?.parentElement ?? toggle.parentElement : null;
+      const btn = root ? [...root.querySelectorAll('button')].find((b) => b.textContent.includes('▶ 开始')) : null;
+      if (btn) btn.click();
+      return Boolean(btn);
+    })()`);
+    await sleep(1000);
     await cdp.clickByText('button', '✓ 完成');
+    // 完成凭证必选：进入凭证页 -> 填凭证 -> 提交 -> 回到首页（后续断言在首页任务卡上）
+    await cdp.waitFor('input[placeholder*="凭证"]');
+    await fillProof();
+    await cdp.clickByText('button', '提交完成');
+    await sleep(1200);
+    await cdp.send('Page.navigate', { url: `${BASE}/` });
+    await cdp.waitFor('[data-task-card-toggle]');
+    await sleep(600);
     let pulseSeen = false;
     for (let i = 0; i < 12 && !pulseSeen; i += 1) {
       await sleep(120);
