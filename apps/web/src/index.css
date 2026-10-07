@@ -38,7 +38,7 @@
   --gold: #de9d44;
   --gold-dark: #bb782f;
   --gold-deep: #c46f16;
-  --gold-light: #faf0d2;
+  --gold-light: #f2e0b0;
 }
 
 body {
@@ -253,5 +253,6 @@ body {
   background: var(--accent);
   box-shadow:
     inset 0 0 0 3px var(--gold-light),
-    inset 0 0 0 6px var(--ink);
+    inset 0 0 0 5px var(--accent),
+    inset 0 0 0 7px var(--ink);
 }
