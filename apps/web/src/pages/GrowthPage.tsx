@@ -102,7 +102,7 @@ export function GrowthPage() {
               </span>
             </div>
           </div>
-          <div className="shrink-0 border-2 border-ink/60 bg-panel/10 px-2 py-1.5 text-center">
+          <div className="shrink-0 px-2 py-1.5 text-center">
             <img
               src="/ui/coin.png"
               alt=""
