@@ -21,6 +21,7 @@ import { Textarea } from '../components/ui/input';
 import { Skeleton } from '../components/ui/skeleton';
 import { TaskStatusBadge } from '../components/ui/status-badge';
 import { useUser } from '../hooks/use-user';
+import { useAuthedImages } from '../hooks/use-authed-images';
 import { ApiError } from '../lib/api/client';
 import { approvalsApi } from '../lib/api/approvals';
 import { familyApi } from '../lib/api/family';
@@ -56,6 +57,13 @@ export function TaskDetailPage() {
 
   const task = taskQuery.data;
   const latestCompletion = completionsQuery.data?.[0];
+  /** 完成凭证：无论任务处于待确认还是已完成，审核人都应看到提交的文字与全部文件 */
+  const proofEntries = (latestCompletion?.proofs ?? []).map((p, i) => ({
+    id: `latest:${i}`,
+    key: p.fileKey ?? null,
+  }));
+  const proofUrls = useAuthedImages(proofEntries);
+
   const approvalId = latestCompletion?.status === 'pending' ? latestCompletion.approvalRequestId : null;
   const approvalQuery = useQuery({
     queryKey: ['approval', approvalId],
@@ -301,6 +309,35 @@ export function TaskDetailPage() {
       </Panel>
 
       {/* 提交状态：待确认 / 退回意见 */}
+      {latestCompletion && (latestCompletion.proofs?.length ?? 0) > 0 && (
+        <Panel data-proof-block>
+          <p className="text-sm font-bold text-ink">完成凭证</p>
+          <div className="mt-2 space-y-2">
+            {latestCompletion.proofs?.map((p, i) => (
+              <div key={`proof-${i}`}>
+                {p.kind === 'text' && p.text && (
+                  <p className="whitespace-pre-wrap text-sm text-ink">{p.text}</p>
+                )}
+                {p.kind !== 'text' && p.fileKey && (
+                  p.kind === 'image' && proofUrls[`latest:${i}`] ? (
+                    <a href={proofUrls[`latest:${i}`]} target="_blank" rel="noreferrer">
+                      <img
+                        data-proof-image
+                        src={proofUrls[`latest:${i}`]}
+                        alt={p.fileName ?? '凭证图片'}
+                        className="max-h-56 w-auto border-2 border-ink [image-rendering:pixelated]"
+                      />
+                    </a>
+                  ) : (
+                    <p className="text-sm text-inkSoft">附件：{p.fileName ?? p.fileKey}</p>
+                  )
+                )}
+              </div>
+            ))}
+          </div>
+        </Panel>
+      )}
+
       {latestCompletion?.status === 'pending' && (
         <Panel className="border-warning/70">
           <p className="text-sm font-bold text-warning">⏳ 已提交，等待确认</p>
