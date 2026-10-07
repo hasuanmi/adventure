@@ -36,7 +36,14 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
   });
   const gc = cardQuery.data?.card ?? null;
   /** 卡面图走鉴权读取（/api/files?key=... 需要 Authorization 头，不能直接放 img src） */
-  const cardFaceUrl = useAuthedImage(gc?.imageUrl ?? null);
+  /**
+   * 卡面图：后端返回的是鉴权读取 URL（/api/files?key=...），而 useAuthedImage 需要的是 **key**，
+   * 因此这里从 URL 中取出 key 再交给 hook（直接传整条 URL 会取不到图、回退成占位底图）。
+   */
+  const cardFaceKey = gc?.imageUrl
+    ? decodeURIComponent(gc.imageUrl.split('key=')[1] ?? '') || null
+    : null;
+  const cardFaceUrl = useAuthedImage(cardFaceKey);
   const [collecting, setCollecting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -114,7 +121,7 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
               alt=""
               aria-hidden
               className="pointer-events-none absolute z-0 object-cover [image-rendering:pixelated]"
-              style={{ left: "8%", top: "10%", width: "84%", height: "48%" }}
+              style={{ left: "8%", top: "10%", width: "84%", height: "52%" }}
             />
 
             <img
