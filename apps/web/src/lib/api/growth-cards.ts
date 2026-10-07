@@ -1,4 +1,4 @@
-import { api } from './client';
+import { request } from './client';
 
 export interface GrowthCardDto {
   date: string;
@@ -16,12 +16,10 @@ export interface GrowthCardDto {
  *  · claimToday：领取/生成（幂等，同日只生成一次）；regenerateImage=true 表示仅重试图片
  */
 export const growthCardsApi = {
-  async getToday(): Promise<GrowthCardDto | null> {
-    const res = await api.get<{ card: GrowthCardDto | null }>('/growth-cards/today');
-    return res.card;
-  },
-  async claimToday(regenerateImage = false): Promise<GrowthCardDto> {
-    const res = await api.post<{ card: GrowthCardDto }>('/growth-cards/today', { regenerateImage });
-    return res.card;
-  },
+  getToday: () => request<{ card: GrowthCardDto | null }>('/growth-cards/today'),
+  claimToday: (regenerateImage = false) =>
+    request<{ card: GrowthCardDto }>('/growth-cards/today', {
+      method: 'POST',
+      body: JSON.stringify({ regenerateImage }),
+    }),
 };
