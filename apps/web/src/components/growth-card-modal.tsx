@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GROWTH_CARD_TITLE, growthCardOf } from '@huahua/shared-types';
 import { ApiError } from '../lib/api/client';
@@ -90,7 +90,7 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
           <div className="relative border-2 border-ink bg-panelLight p-[3px]">
             <img
               data-growth-card-image
-              src="/ui/growth-card-face.jpg"
+              src="/ui/card-frame.png"
               alt=""
               className={`block w-full [image-rendering:pixelated] ${
                 collecting ? 'pixel-card-pop' : ''

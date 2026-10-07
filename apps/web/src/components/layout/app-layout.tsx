@@ -1,4 +1,4 @@
-import { BookOpen, CalendarDays, Home, LogOut, Users } from 'lucide-react';
+﻿import { BookOpen, CalendarDays, Home, LogOut, Users } from 'lucide-react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { levelProgressFromXp } from '@huahua/shared-types';
@@ -79,7 +79,7 @@ export function AppLayout({
               构图与约束见 components/layout/player-hud.tsx 顶部注释。 */}
           <Link to="/growth" data-growth-entry aria-label="我的成长" title="我的成长" className="shrink-0">
             <PlayerHud
-              avatarUrl="/avatar-girl-toon.png"
+              avatarUrl="/ui/avatar-hero.png"
               level={xpProgress ? xpProgress.level : 1}
               xpInLevel={xpProgress?.current ?? 0}
               xpNeed={xpProgress?.needed ?? 0}
