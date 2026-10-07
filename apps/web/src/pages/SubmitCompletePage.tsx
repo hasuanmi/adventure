@@ -13,6 +13,7 @@ import { Label } from '../components/ui/label';
 import { Skeleton } from '../components/ui/skeleton';
 import { TaskStatusBadge } from '../components/ui/status-badge';
 import { tasksApi } from '../lib/api/tasks';
+import { compressImage, filesApi } from '../lib/api/files';
 import { taskTileIconUrl } from '../lib/quest-icons';
 
 // Submit Complete（无旧项目参考——自研；表单模式参考 §二点七）
@@ -26,6 +27,10 @@ export function SubmitCompletePage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  /** 完成凭证：已上传的附件（数量不限） */
+  const [proofFiles, setProofFiles] = useState<{ key: string; name: string; preview: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [result, setResult] = useState<{ status: string; taskStatus: string; reviewComment?: string | null } | null>(null);
 
   const taskQuery = useQuery({ queryKey: ['task', id], queryFn: () => tasksApi.get(id) });
@@ -36,13 +41,45 @@ export function SubmitCompletePage() {
     defaultValues: { note: '', evidence: '' },
   });
 
+  /** 选择文件后立即上传（可一次多选；**没有数量上限**） */
+  async function onPickFiles(list: FileList | null): Promise<void> {
+    if (!list || list.length === 0) return;
+    setFileError(null);
+    setUploading(true);
+    try {
+      const picked = Array.from(list);
+      const uploaded = await Promise.all(
+        picked.map(async (file) => {
+          const compressed = await compressImage(file);
+          const stored = await filesApi.upload(compressed, 'completion-proof');
+          return { key: stored.key, name: file.name, preview: URL.createObjectURL(compressed) };
+        }),
+      );
+      setProofFiles((prev) => [...prev, ...uploaded]);
+    } catch {
+      setFileError('上传失败，请重试');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function removeProofFile(key: string): void {
+    setProofFiles((prev) => prev.filter((p) => p.key !== key));
+  }
+
+
   async function onSubmit(values: SubmitValues) {
+    if (!values.evidence?.trim() && proofFiles.length === 0) {
+      setSubmitError('完成凭证必选：请上传图片/文件或输入文字');
+      return;
+    }
     setSubmitError(null);
     setResult(null);
     try {
       await tasksApi.submitComplete(id, {
         note: values.note || undefined,
-        evidenceJson: values.evidence ? { text: values.evidence } : undefined,
+        proofText: values.evidence?.trim() || undefined,
+        proofFileKeys: proofFiles.map((p) => p.key),
       });
       const fresh = await tasksApi.get(id);
       const completions = await tasksApi.completions(id);
@@ -115,9 +152,47 @@ export function SubmitCompletePage() {
                 <Label>完成说明</Label>
                 <Textarea rows={3} placeholder="说说你完成了什么…" {...form.register('note')} />
               </div>
-              <div>
-                <Label>完成凭证（可选）</Label>
-                <Input placeholder="凭证描述或链接" {...form.register('evidence')} />
+                            <div>
+                <Label>完成凭证（必选）</Label>
+                <p className="mb-1 text-[11px] text-inkSoft">
+                  上传图片 / 照片 / 文件，或直接输入文字；图片数量不限。
+                </p>
+                <Input placeholder="凭证描述（也可以只用上传的文件）" {...form.register('evidence')} />
+                <div className="mt-2 space-y-2">
+                  <input
+                    data-proof-file-input
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf,.txt,.doc,.docx"
+                    onChange={(e) => {
+                      void onPickFiles(e.target.files);
+                      e.target.value = '';
+                    }}
+                    className="block w-full text-xs text-ink"
+                  />
+                  {uploading && <p className="text-xs font-bold text-inkSoft">上传中…</p>}
+                  {fileError && <p className="text-xs font-bold text-danger">{fileError}</p>}
+                  {proofFiles.length > 0 && (
+                    <div data-proof-file-list className="flex flex-wrap gap-2">
+                      {proofFiles.map((p) => (
+                        <div key={p.key} className="relative border-2 border-ink bg-panelLight p-0.5">
+                          <img src={p.preview} alt={p.name} className="h-14 w-14 object-cover" />
+                          <button
+                            type="button"
+                            aria-label="移除"
+                            onClick={() => removeProofFile(p.key)}
+                            className="absolute -right-1.5 -top-1.5 h-4 w-4 border-2 border-ink bg-danger text-[10px] font-bold leading-none text-white"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p data-proof-count className="text-[11px] font-bold text-inkSoft">
+                    已上传 {proofFiles.length} 个附件
+                  </p>
+                </div>
               </div>
               {submitError && <p className="text-sm font-bold text-danger">{submitError}</p>}
               <Button type="submit" variant="ok" disabled={form.formState.isSubmitting}>
