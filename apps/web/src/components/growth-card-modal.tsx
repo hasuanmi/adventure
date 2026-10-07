@@ -1,8 +1,10 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GROWTH_CARD_TITLE, growthCardOf } from '@huahua/shared-types';
 import { ApiError } from '../lib/api/client';
 import { attendanceApi } from '../lib/api/attendance';
+import { growthCardsApi } from '../lib/api/growth-cards';
+import { useAuthedImage } from '../hooks/use-authed-image';
 
 export interface GrowthCardModalProps {
   /** 卡片日期（YYYY-MM-DD，家庭时区） */
@@ -24,7 +26,17 @@ const COLLECT_MS = 900;
  */
 export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardModalProps) {
   const queryClient = useQueryClient();
+  /** 静态兜底文案（AI 文案不可用时使用） */
   const card = growthCardOf(date);
+  /** **只读**读取当天成长卡：刷新页面走这里，绝不触发生成（用户规则：刷新不能重新生成） */
+  const cardQuery = useQuery({
+    queryKey: ['growth-card', date],
+    queryFn: () => growthCardsApi.getToday(),
+    enabled: open,
+  });
+  const gc = cardQuery.data?.card ?? null;
+  /** 卡面图走鉴权读取（/api/files?key=... 需要 Authorization 头，不能直接放 img src） */
+  const cardFaceUrl = useAuthedImage(gc?.imageUrl ?? null);
   const [collecting, setCollecting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -44,10 +56,18 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
   }, [open]);
 
   const claim = useMutation({
-    mutationFn: () => attendanceApi.checkIn(),
+    mutationFn: async () => {
+      await attendanceApi.checkIn();
+      // 打卡成功后**后台**生成/领取当天成长卡（幂等）：
+      // 不 await —— 出图需要数秒，不能拖慢"领取"的关闭动画与入口状态。
+      void growthCardsApi.claimToday().catch(() => {
+        /* 未就绪：状态由后端记录，前端稍后 refetch 时显示"成长卡正在准备中" */
+      });
+    },
     onSuccess: () => {
       setCollecting(true);
       void queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      void queryClient.invalidateQueries({ queryKey: ['growth-card'] });
       setTimeout(() => {
         onClaimed?.();
         onClose();
@@ -90,7 +110,7 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
           <div className="relative border-2 border-ink bg-panelLight p-[3px]">
             <img
               data-growth-card-face
-              src="/ui/growth-card-face.jpg"
+              src={cardFaceUrl ?? "/ui/growth-card-face.jpg"}
               alt=""
               aria-hidden
               className="pointer-events-none absolute z-0 object-cover [image-rendering:pixelated]"
@@ -110,15 +130,30 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
               data-growth-card-title-overlay
               className="pointer-events-none absolute inset-x-[8%] top-[62.4%] z-20 flex h-[11.7%] items-center justify-center text-[13px] font-extrabold tracking-widest text-ink"
             >
-              {GROWTH_CARD_TITLE}
+              {gc?.title ?? GROWTH_CARD_TITLE}
             </p>
             {/* 成长寄语：叠在卡框下方的米色横带上 */}
             <p
               data-growth-card-copy-overlay
               className="pointer-events-none absolute inset-x-[10%] top-[77.1%] z-20 flex h-[13.3%] items-center justify-center text-center text-[11px] font-bold leading-snug text-ink"
             >
-              {card.copy}
+              {gc?.message ?? card.copy}
             </p>
+            {gc?.status === 'text_ready_image_pending' && (
+              <div className="absolute inset-x-0 bottom-[2%] z-20 flex flex-col items-center gap-1">
+                <p data-growth-card-pending className="text-[10px] font-bold text-ink">
+                  成长卡正在准备中，请稍后再试
+                </p>
+                <button
+                  type="button"
+                  data-growth-card-retry
+                  onClick={() => { void growthCardsApi.claimToday(true).then(() => cardQuery.refetch()); }}
+                  className="border-2 border-ink bg-accent px-2 py-0.5 text-[10px] font-extrabold text-white shadow-pixel"
+                >
+                  重试生成图片
+                </button>
+              </div>
+            )}
             {collecting && (
               <span aria-hidden className="pointer-events-none absolute inset-0">
                 {[
@@ -150,7 +185,7 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
             <span aria-hidden className="absolute bottom-1 left-1 h-1 w-1 bg-ink/50" />
             <span aria-hidden className="absolute bottom-1 right-1 h-1 w-1 bg-ink/50" />
             <p data-growth-card-copy className="text-center text-xs font-bold leading-relaxed text-ink">
-              {card.copy}
+              {gc?.message ?? card.copy}
             </p>
           </div>
 
