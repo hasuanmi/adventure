@@ -1,5 +1,6 @@
--- Growth cards (daily reward card). One row per user per day (unique index enforces "once per day").
--- Content is generated once and then always read back from history; page refresh must not regenerate.
+-- Growth cards (daily reward card). One row per user per day:
+-- the unique index (user_id, card_date) enforces "at most once per day".
+-- Content is generated once, then always read back from history; refreshing the page must NOT regenerate.
 CREATE TABLE "growth_cards" (
   "id"            UUID         NOT NULL DEFAULT gen_random_uuid(),
   "family_id"     UUID         NOT NULL,
@@ -20,5 +21,5 @@ CREATE UNIQUE INDEX "uniq_growth_cards_user_date" ON "growth_cards" ("user_id", 
 CREATE INDEX "idx_growth_cards_family_id" ON "growth_cards" ("family_id");
 ALTER TABLE "growth_cards" ADD CONSTRAINT "growth_cards_user_id_fkey"
   FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "growth_cards" ADD CONSTRAINT "growth_cards_family_id_fkey"
-  FOREIGN KEY ("family_id") REFERENCES "families"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- NOTE: no foreign key on family_id — the project baseline has no "families" table
+-- (family_id is a plain column plus the index above, as in every other table).
