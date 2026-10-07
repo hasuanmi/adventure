@@ -108,14 +108,14 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
             {/* 标题：叠在卡框中部的银色横带上 */}
             <p
               data-growth-card-title-overlay
-              className="pointer-events-none absolute inset-x-[8%] top-[62.4%] flex h-[11.7%] items-center justify-center text-[13px] font-extrabold tracking-widest text-ink"
+              className="pointer-events-none absolute inset-x-[8%] top-[62.4%] z-20 flex h-[11.7%] items-center justify-center text-[13px] font-extrabold tracking-widest text-ink"
             >
               {GROWTH_CARD_TITLE}
             </p>
             {/* 成长寄语：叠在卡框下方的米色横带上 */}
             <p
               data-growth-card-copy-overlay
-              className="pointer-events-none absolute inset-x-[10%] top-[77.1%] flex h-[13.3%] items-center justify-center text-center text-[11px] font-bold leading-snug text-ink"
+              className="pointer-events-none absolute inset-x-[10%] top-[77.1%] z-20 flex h-[13.3%] items-center justify-center text-center text-[11px] font-bold leading-snug text-ink"
             >
               {card.copy}
             </p>
