@@ -27,7 +27,7 @@ import { familyApi } from '../lib/api/family';
 import { tasksApi } from '../lib/api/tasks';
 import { rewardProfilesApi } from '../lib/api/reward-profiles';
 import { subjectMeta } from '../lib/constants';
-import { taskTileIconUrl, taskTypeLabel } from '../lib/quest-icons';
+import { taskTileIconUrl, taskTypeLabel, taskTypeChipClass } from '../lib/quest-icons';
 import { formatDateTime, taskProgress, taskProgressColor } from '../lib/task-progress';
 
 const WEEK_CN = ['一', '二', '三', '四', '五', '六', '日'];
@@ -130,7 +130,7 @@ export function TaskDetailPage() {
   const current = task; // 供函数/闭包内使用（TS 窄化不进入函数体）
   const rewardLabel =
     profilesQuery.data?.profiles.find((p) => p.code === current.rewardProfile)?.label ??
-    (current.rewardProfile ? current.rewardProfile : '自定义任务');
+    (current.rewardProfile ? current.rewardProfile : '—');
   const childName = familyQuery.data?.members.find((m) => m.id === current.childId)?.username;
   const reviewerName = current.reviewerId
     ? familyQuery.data?.members.find((m) => m.id === current.reviewerId)?.username
@@ -222,7 +222,14 @@ export function TaskDetailPage() {
             <h2 className="truncate text-xl font-extrabold">{task.title}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <TaskStatusBadge status={task.status} />
-              <Badge variant="soft">{taskTypeLabel(task.rewardProfile)}</Badge>
+              {taskTypeChipClass(task.rewardProfile) ? (
+              <span
+                data-task-type-chip
+                className={`inline-flex items-center border-2 px-1.5 py-0.5 text-[11px] font-extrabold ${taskTypeChipClass(task.rewardProfile)}`}
+              >
+                {taskTypeLabel(task.rewardProfile)}
+              </span>
+            ) : null}
               <Badge variant="soft">
                 {subj.emoji} {subj.label}
               </Badge>
