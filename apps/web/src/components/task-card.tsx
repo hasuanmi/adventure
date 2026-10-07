@@ -231,14 +231,6 @@ export function TaskCard({ task, onCancelled }: { task: TaskDto; onCancelled?: (
                 {mutation.isPending ? '处理中…' : action.label}
               </button>
             )}
-            {isOwnChild && task.status === 'in_progress' && (
-              <Link
-                to={`/tasks/${task.id}/submit`}
-                className="border-2 border-ink bg-panel px-4 py-2 text-sm font-bold text-ink shadow-pixel transition active:translate-y-1"
-              >
-                写说明并提交
-              </Link>
-            )}
             <Link
               to={`/tasks/${task.id}`}
               className="border-2 border-ink bg-panel px-4 py-2 text-sm font-bold text-ink shadow-pixel transition active:translate-y-1"
