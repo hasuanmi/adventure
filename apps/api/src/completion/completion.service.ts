@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException, OnModuleInit , BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { COMPLETION_REASON, TaskCompletionDto } from '@huahua/shared-types';
 import { RequestActor } from '../auth/jwt-auth.guard';
@@ -40,6 +40,14 @@ export class CompletionService implements OnModuleInit {
 
   /** 孩子提交完成（统一入口：无需审批=自动批准+完成定稿；需审批=进入 pending） */
   async submit(actor: RequestActor, taskId: string, dto: SubmitCompletionDto): Promise<TaskCompletionDto[]> {
+    // 完成凭证为**必选**：文字或至少一个文件；两者可同时提供
+    if (!dto.proofText?.trim() && (dto.proofFileKeys?.length ?? 0) === 0) {
+      throw new BadRequestException({
+        error: 'bad_request',
+        reason: 'proof_required',
+        fields: { proof: '完成凭证必选：请上传图片/文件或输入文字' },
+      });
+    }
     const task = await this.prisma.task.findUnique({ where: { id: taskId } });
     if (!task || task.deletedAt) {
       throw new NotFoundException({ error: 'not_found', reason: COMPLETION_REASON.NOT_FOUND });
@@ -68,6 +76,7 @@ export class CompletionService implements OnModuleInit {
             status: 'approved',
           },
         });
+        await this.saveProofs(tx, task.familyId, completion.id, dto);
         await tx.task.update({ where: { id: taskId }, data: { status: 'completed' } });
         await this.growth.grant(tx, {
           userId: actor.sub,
@@ -101,6 +110,7 @@ export class CompletionService implements OnModuleInit {
               status: 'pending',
             },
           });
+          await this.saveProofs(tx, task.familyId, completion.id, dto);
           const request = await tx.approvalRequest.create({
             data: {
               familyId: task.familyId,
@@ -173,6 +183,33 @@ export class CompletionService implements OnModuleInit {
   }
 
   /** 完成记录列表（数据范围同任务：child 自己 / parent 家庭） */
+
+  /** 保存完成凭证：文字一行 + 每个文件一行（**图片数量不限**） */
+  private async saveProofs(
+    tx: Prisma.TransactionClient,
+    familyId: string,
+    completionId: string,
+    dto: SubmitCompletionDto,
+  ): Promise<void> {
+    const text = dto.proofText?.trim();
+    const keys = dto.proofFileKeys ?? [];
+    if (!text && keys.length === 0) return;
+    const rows: {
+      familyId: string;
+      completionId: string;
+      kind: string;
+      text?: string;
+      fileKey?: string;
+      sortOrder: number;
+    }[] = [];
+    if (text) rows.push({ familyId, completionId, kind: 'text', text, sortOrder: 0 });
+    keys.forEach((key: string, i: number) => {
+      const kind = /\.(png|jpe?g|webp|gif|bmp)$/i.test(key) ? 'image' : 'file';
+      rows.push({ familyId, completionId, kind, fileKey: key, sortOrder: i + 1 });
+    });
+    await tx.completionProof.createMany({ data: rows });
+  }
+
   async list(taskId: string, actor: RequestActor): Promise<TaskCompletionDto[]> {
     const task = await this.prisma.task.findUnique({ where: { id: taskId } });
     if (!task || task.deletedAt) {

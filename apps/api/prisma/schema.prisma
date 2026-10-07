@@ -129,6 +129,8 @@ model TaskCompletion {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   task        Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  proofs              CompletionProof[]
   child       User         @relation("CompletionChild", fields: [childId], references: [id], onDelete: Cascade)
   rewardGrant RewardGrant?
 
@@ -428,4 +430,25 @@ model GrowthCard {
   @@unique([userId, cardDate])
   @@index([familyId], name: "idx_growth_cards_family_id")
   @@map("growth_cards")
+}
+// P6：完成凭证（文字 / 图片 / 文件；一行 = 一个条目，因此图片数量不限）
+// 检查人（家长）需能看到凭证文字与全部附件
+model CompletionProof {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId     String   @map("family_id") @db.Uuid
+  completionId String   @map("completion_id") @db.Uuid
+  kind         String   @db.VarChar(16)
+  text         String?
+  fileKey      String?  @map("file_key") @db.VarChar(300)
+  fileName     String?  @map("file_name") @db.VarChar(200)
+  mime         String?  @db.VarChar(100)
+  size         Int?
+  sortOrder    Int      @default(0) @map("sort_order") @db.SmallInt
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  completion TaskCompletion @relation(fields: [completionId], references: [id], onDelete: Cascade)
+
+  @@index([completionId], name: "idx_completion_proofs_completion_id")
+  @@index([familyId], name: "idx_completion_proofs_family_id")
+  @@map("completion_proofs")
 }
