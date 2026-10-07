@@ -9,6 +9,7 @@ import { Empty } from '../components/ui/empty';
 import { Textarea } from '../components/ui/input';
 import { Skeleton } from '../components/ui/skeleton';
 import { useUser } from '../hooks/use-user';
+import { useAuthedImages } from '../hooks/use-authed-images';
 import { ApiError } from '../lib/api/client';
 import { approvalsApi } from '../lib/api/approvals';
 import { familyApi } from '../lib/api/family';
@@ -77,6 +78,12 @@ export function ApprovalsPage() {
     `flex-1 border-2 border-ink px-3 py-2 text-sm font-extrabold shadow-pixel transition active:translate-y-1 ${
       active ? 'bg-accent text-white' : 'bg-panel text-ink'
     }`;
+  /** 完成凭证的图片：一次性批量取回（存储接口需鉴权，<img> 带不了 Bearer）——数量不限 */
+  const proofEntries = rows.flatMap((r) =>
+    (r.descriptor?.proofs ?? []).map((p, i) => ({ id: `${r.id}:${i}`, key: p.fileKey ?? null })),
+  );
+  const proofUrls = useAuthedImages(proofEntries);
+
 
   function renderRow(row: ApprovalRequestDto) {
     const meta = STATUS_META[row.status] ?? { label: row.status, variant: 'soft' as const };
@@ -100,6 +107,34 @@ export function ApprovalsPage() {
             {row.status === 'rejected' ? '驳回意见：' : '意见/备注：'}
             {row.comment}
           </p>
+        )}
+
+        {(row.descriptor?.proofs?.length ?? 0) > 0 && (
+          <div
+            data-proof-block
+            className="mt-2 space-y-1.5 border-2 border-ink/30 bg-panelLight px-2 py-1.5"
+          >
+            <p className="text-xs font-bold text-inkSoft">完成凭证</p>
+            {row.descriptor?.proofs?.map((p, i) => (
+              <div key={`${row.id}-${i}`}>
+                {p.kind === 'text' && p.text && (
+                  <p className="whitespace-pre-wrap text-xs text-ink">{p.text}</p>
+                )}
+                {p.kind !== 'text' && p.fileKey && (
+                  p.kind === 'image' && proofUrls[`${row.id}:${i}`] ? (
+                    <img
+                      data-proof-image
+                      src={proofUrls[`${row.id}:${i}`]}
+                      alt={p.fileName ?? '凭证图片'}
+                      className="max-h-40 w-auto border-2 border-ink [image-rendering:pixelated]"
+                    />
+                  ) : (
+                    <p className="text-xs text-inkSoft">附件：{p.fileName ?? p.fileKey}</p>
+                  )
+                )}
+              </div>
+            ))}
+          </div>
         )}
 
         {row.descriptor?.taskId && (
