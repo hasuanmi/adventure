@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+﻿import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 export interface AdventureProgressProps {
   /** 已完成百分比（0–100，由调用方按任务状态统计，本组件不改任何统计逻辑） */
@@ -33,7 +33,7 @@ const SPARKS: { dx: string; dy: string }[] = [
 export function AdventureProgress({
   percent,
   ready = true,
-  markerSrc = '/avatar-girl-toon.png',
+  markerSrc = '/ui/sunflower.png',
   className,
 }: AdventureProgressProps) {
   const clamped = Math.max(0, Math.min(100, percent));

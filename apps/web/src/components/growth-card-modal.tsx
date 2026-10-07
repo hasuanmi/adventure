@@ -96,6 +96,20 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
                 collecting ? 'pixel-card-pop' : ''
               }`}
             />
+            {/* 标题：叠在卡框中部的银色横带上 */}
+            <p
+              data-growth-card-title-overlay
+              className="pointer-events-none absolute inset-x-[8%] top-[63%] text-center text-[13px] font-extrabold tracking-widest text-ink"
+            >
+              {GROWTH_CARD_TITLE}
+            </p>
+            {/* 成长寄语：叠在卡框下方的米色横带上 */}
+            <p
+              data-growth-card-copy-overlay
+              className="pointer-events-none absolute inset-x-[10%] top-[79%] text-center text-[11px] font-bold leading-snug text-ink"
+            >
+              {card.copy}
+            </p>
             {collecting && (
               <span aria-hidden className="pointer-events-none absolute inset-0">
                 {[
@@ -116,12 +130,12 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
           </div>
 
           {/* 标题带（参考图的银色横带 → 我们的金色带） */}
-          <div className="mt-[6px] border-2 border-ink bg-accent px-2 py-1 text-center">
+          <div className="mt-[6px] hidden border-2 border-ink bg-accent px-2 py-1 text-center">
             <p className="text-sm font-extrabold tracking-widest text-ink">{GROWTH_CARD_TITLE}</p>
           </div>
 
           {/* 一句话面板（羊皮纸 + 四角小方块装饰） */}
-          <div className="relative mt-[6px] border-2 border-ink bg-panelLight px-3 py-3">
+          <div className="relative mt-[6px] hidden border-2 border-ink bg-panelLight px-3 py-3">
             <span aria-hidden className="absolute left-1 top-1 h-1 w-1 bg-ink/50" />
             <span aria-hidden className="absolute right-1 top-1 h-1 w-1 bg-ink/50" />
             <span aria-hidden className="absolute bottom-1 left-1 h-1 w-1 bg-ink/50" />

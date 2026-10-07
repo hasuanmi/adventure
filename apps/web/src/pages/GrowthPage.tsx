@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+﻿import { useQuery } from '@tanstack/react-query';
 import {
   DIMENSION_LABELS,
   SIX_DIMENSIONS,
@@ -55,7 +55,7 @@ export function GrowthPage() {
       <Panel className="border-2 border-ink bg-ink text-panelLight">
         <div className="flex items-center gap-3">
           <img
-            src="/avatar-girl-toon.png"
+            src="/ui/avatar-hero.png"
             alt="我的头像"
             className="h-16 w-16 shrink-0 rounded-md border-2 border-ink/60 bg-panelLight object-cover"
           />
