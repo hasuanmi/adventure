@@ -30,10 +30,29 @@ export class CompletionService implements OnModuleInit {
     this.approval.registerDescriptor('task_completion', async (businessIds) => {
       const completions = await this.prisma.taskCompletion.findMany({
         where: { id: { in: businessIds } },
-        select: { id: true, taskId: true, task: { select: { title: true } } },
+        select: {
+            id: true,
+            taskId: true,
+            task: { select: { title: true } },
+            proofs: { orderBy: { sortOrder: 'asc' } },
+          },
       });
       return new Map(
-        completions.map((c) => [c.id, { label: c.task.title, taskId: c.taskId }] as const),
+        completions.map((c) => [
+            c.id,
+            {
+              label: c.task.title,
+              taskId: c.taskId,
+              proofs: (c.proofs ?? []).map((p) => ({
+                kind: p.kind,
+                text: p.text,
+                fileKey: p.fileKey,
+                fileName: p.fileName,
+                mime: p.mime,
+                size: p.size,
+              })),
+            },
+          ] as const),
       );
     });
   }

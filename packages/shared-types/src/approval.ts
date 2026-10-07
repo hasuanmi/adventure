@@ -23,6 +23,15 @@ export type ApprovalDecision = 'approve' | 'reject';
 export interface ApprovalDescriptor {
   label: string;
   taskId?: string | null;
+  /** 完成凭证（检查人/家长在审批列表直接可见）：文字与全部附件 */
+  proofs?: {
+    kind: string;
+    text?: string | null;
+    fileKey?: string | null;
+    fileName?: string | null;
+    mime?: string | null;
+    size?: number | null;
+  }[];
 }
 
 export interface ApprovalRequestDto {
