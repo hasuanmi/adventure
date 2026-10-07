@@ -94,7 +94,7 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
               alt=""
               aria-hidden
               className="pointer-events-none absolute object-cover [image-rendering:pixelated]"
-              style={{ left: "13%", top: "4.0%", width: "74%", height: "56.9%" }}
+              style={{ left: "0.0%", top: "0.0%", width: "100.0%", height: "0.4%" }}
             />
             <img
               data-growth-card-image
@@ -107,14 +107,14 @@ export function GrowthCardModal({ date, open, onClose, onClaimed }: GrowthCardMo
             {/* 标题：叠在卡框中部的银色横带上 */}
             <p
               data-growth-card-title-overlay
-              className="pointer-events-none absolute inset-x-[8%] top-[59%] flex h-[11%] items-center justify-center text-[13px] font-extrabold tracking-widest text-ink"
+              className="pointer-events-none absolute inset-x-[8%] top-[62.4%] flex h-[11.7%] items-center justify-center text-[13px] font-extrabold tracking-widest text-ink"
             >
               {GROWTH_CARD_TITLE}
             </p>
             {/* 成长寄语：叠在卡框下方的米色横带上 */}
             <p
               data-growth-card-copy-overlay
-              className="pointer-events-none absolute inset-x-[10%] top-[72%] flex h-[14%] items-center justify-center text-center text-[11px] font-bold leading-snug text-ink"
+              className="pointer-events-none absolute inset-x-[10%] top-[77.1%] flex h-[13.3%] items-center justify-center text-center text-[11px] font-bold leading-snug text-ink"
             >
               {card.copy}
             </p>
