@@ -21,11 +21,24 @@ export interface TaskCompletionDto {
   reviewedAt?: string | null;
   reviewComment?: string | null;
   approvalRequestId?: string | null;
+  /** 完成凭证（检查人/家长可见）：文字与全部附件 */
+  proofs?: {
+    kind: string;
+    text?: string | null;
+    fileKey?: string | null;
+    fileName?: string | null;
+    mime?: string | null;
+    size?: number | null;
+  }[];
 }
 
 export interface SubmitCompletionRequest {
   note?: string;
   evidenceJson?: unknown;
+  /** 完成凭证：文字（与 proofFileKeys 至少一项） */
+  proofText?: string;
+  /** 完成凭证：文件 key 列表（数量不限） */
+  proofFileKeys?: string[];
 }
 
 export const COMPLETION_REASON = {

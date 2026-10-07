@@ -221,6 +221,7 @@ export class CompletionService implements OnModuleInit {
     }
     const rows = await this.prisma.taskCompletion.findMany({
       where: { taskId },
+      include: { proofs: { orderBy: { sortOrder: 'asc' } } },
       orderBy: { submittedAt: 'desc' },
     });
     return rows.map((r) => ({
@@ -235,6 +236,15 @@ export class CompletionService implements OnModuleInit {
       reviewedAt: r.reviewedAt?.toISOString() ?? null,
       reviewComment: r.reviewComment,
       approvalRequestId: r.approvalRequestId,
+      // 完成凭证：检查人（家长）在这里拿到文字与全部附件的 key
+      proofs: (r.proofs ?? []).map((p) => ({
+        kind: p.kind,
+        text: p.text,
+        fileKey: p.fileKey,
+        fileName: p.fileName,
+        mime: p.mime,
+        size: p.size,
+      })),
     }));
   }
 }
